@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.1 — 2026-11-12
+
+- Added a visible Edit mode button in Settings and a matching tray command.
+  Drag widgets while editing, then choose Finish editing to fix the layout.
+- Music playback controls now work while the layout is fixed. Other widgets
+  continue passing clicks through outside Edit mode.
+
 ## 1.3.0 — 2026-11-12
 
 - Added an optional Music widget to the Add Widget gallery, showing the current

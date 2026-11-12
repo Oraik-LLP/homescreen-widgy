@@ -31,6 +31,7 @@ void App::makeSettingsControls(){
     control(settings,L"BUTTON",L"Widgets",TabWidgets,24,62,168,32,WS_TABSTOP);
     control(settings,L"BUTTON",L"Appearance",TabAppearance,202,62,168,32,WS_TABSTOP);
     control(settings,L"BUTTON",L"Color tools",TabColors,380,62,168,32,WS_TABSTOP);
+    control(settings,L"BUTTON",config.locked?L"Edit mode":L"Finish editing",EditMode,558,62,154,32,WS_TABSTOP);
     control(settings,L"BUTTON",L"Add Widget…",AddWidget,482,108,230,30,WS_TABSTOP);
     control(settings,L"STATIC",L"Selected widget",0,24,112,130,25);
     auto select=control(settings,L"COMBOBOX",L"",SelectWidget,166,108,300,240,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP);
@@ -64,7 +65,7 @@ void App::makeSettingsControls(){
     label(0,L"Windows time zone (daylight saving is automatic)",12,402,6);
     auto zone=add(0,L"COMBOBOX",L"",Zone,12,434,618,260,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,6);
     SendMessageW(zone,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"UTC"));for(const auto& z:zones)SendMessageW(zone,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(z.TimeZoneKeyName));
-    label(0,L"To move widgets, unlock them from the tray menu. Lock to pass clicks through.",12,524);
+    label(0,L"Choose Edit mode to drag widgets. Finish editing to fix their positions.",12,524);
     label(0,L"New widgets start hidden. Notes live in Tagme.",12,558);
 
     label(1,L"THEMES — original static styles inspired by expressive lock screens",12,8);
@@ -163,7 +164,8 @@ void App::populateSettings(){
     int zoneIndex=0;for(size_t i=0;i<zones.size();++i)if(draft.zone==zones[i].TimeZoneKeyName)zoneIndex=static_cast<int>(i+1);SendMessageW(child(Zone),CB_SETCURSEL,zoneIndex,0);
     SetWindowTextW(child(ToolHex),colorText(toolColor).c_str());
     SetWindowTextW(child(Status),warning.empty()?L"Native · offline · static themes":warning.c_str());
-    if(w.kind==Kind::Music&&warning.empty())SetWindowTextW(child(Status),L"Unlock widgets from the tray to use playback controls. Drag outside the controls to move Music.");
+    SetWindowTextW(child(EditMode),config.locked?L"Edit mode":L"Finish editing");
+    if(w.kind==Kind::Music&&warning.empty())SetWindowTextW(child(Status),L"Playback controls work anytime. Use Edit mode to move Music by dragging outside its controls.");
     for(size_t i=0;i<12;++i)SetWindowTextW(child(RecentFirst+static_cast<int>(i)),i<config.recent.size()?colorText(config.recent[i]).c_str():L"Empty recent");
     for(size_t i=0;i<8;++i)SetWindowTextW(child(FavoriteFirst+static_cast<int>(i)),i<config.favorites.size()?colorText(config.favorites[i]).c_str():L"Empty favorite");
     populating=false;layoutSettings();
@@ -248,6 +250,7 @@ LRESULT CALLBACK App::SettingsProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
             if(item!=a->uiItems.end()&&item->page==a->page){RECT rect{};GetClientRect(a->panel,&rect);int view=MulDiv(rect.bottom,96,GetDpiForWindow(hwnd));if(item->y<a->scroll)a->scroll=item->y;else if(item->y+40>a->scroll+view)a->scroll=item->y+40-view;a->layoutSettings();}return 0;
         }
         if(id==SelectWidget&&notice==CBN_SELCHANGE){int next=static_cast<int>(SendMessageW(a->child(SelectWidget),CB_GETCURSEL,0,0));if(a->applySettings()){a->selected=std::clamp(next,0,WidgetCount-1);a->scroll=0;a->populateSettings();}else SendMessageW(a->child(SelectWidget),CB_SETCURSEL,a->selected,0);}
+        else if(id==EditMode&&notice==BN_CLICKED)a->command(MenuLock);
         else if(id==AddWidget&&notice==BN_CLICKED){if(a->applySettings()){a->page=3;a->scroll=0;a->refreshWidgetPreviews();a->layoutSettings();SetWindowTextW(a->child(Status),L"Choose a widget preview to add it to your desktop.");}}
         else if(id==BackWidgets){a->page=0;a->scroll=0;a->layoutSettings();}
         else if(id>=WidgetFirst&&id<WidgetFirst+WidgetCount){
@@ -255,7 +258,7 @@ LRESULT CALLBACK App::SettingsProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
             if(a->applySettings()){
                 a->selected=index;auto& cfg=a->config.widgets[index];bool added=!cfg.visible;cfg.visible=true;a->config.shown=true;a->draft=a->config;a->updateMedia();
                 a->place(a->widgets[index]);a->widgets[index].dirty=true;a->page=0;a->scroll=0;a->render(true);a->repair();a->schedule();a->save();a->populateSettings();
-                auto message=added?std::wstring(L"Added ")+kindName(cfg.kind)+L". Unlock widgets from the tray to move it.":std::wstring(kindName(cfg.kind))+L" is already on your desktop; selected.";
+                auto message=added?std::wstring(L"Added ")+kindName(cfg.kind)+L". Choose Edit mode to move it.":std::wstring(kindName(cfg.kind))+L" is already on your desktop; selected.";
                 SetWindowTextW(a->child(Status),message.c_str());
             }
         }

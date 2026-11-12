@@ -30,7 +30,7 @@ struct Widget {
 enum ControlId { SelectWidget=201, Preset, Font, Scale, Opacity, Color, Accent, Visible, Hour24, Seconds, Startup, Apply, Reset, Done, Status, TabWidgets, TabAppearance, TabColors, MatchWallpaper, UseTheme, PickText, PickAccent, TextSwatch, AccentSwatch,
     FocusMinutes, BreakMinutes, FocusStart, FocusReset, FocusNext, EventTitle, EventDate, Zone, City,
     ToolHex, ToolChoose, ToolPick, CopyHex, CopyRgb, Favorite, AssignText, AssignAccent,
-    ThemeFirst=400, RecentFirst=500, FavoriteFirst=520, PaletteFirst=540, AddWidget=550, BackWidgets=551, WidgetFirst=600 };
+    ThemeFirst=400, RecentFirst=500, FavoriteFirst=520, PaletteFirst=540, AddWidget=550, BackWidgets=551, EditMode=552, WidgetFirst=600 };
 class App {
 public:
     HINSTANCE instance{}; HWND control{},settings{},desktopHost{}; UINT taskbarCreated{};
@@ -171,7 +171,8 @@ void App::repair() {
     // SetParent, injected shell DLL, topmost window, or wallpaper modification.
     for(auto& w:widgets) {
         LONG_PTR ex=GetWindowLongPtrW(w.window,GWL_EXSTYLE);
-        ex=config.locked ? (ex|WS_EX_TRANSPARENT) : (ex&~WS_EX_TRANSPARENT);
+        const bool passThrough=config.locked&&config.widgets[w.index].kind!=Kind::Music;
+        ex=passThrough ? (ex|WS_EX_TRANSPARENT) : (ex&~WS_EX_TRANSPARENT);
         SetWindowLongPtrW(w.window,GWL_EXSTYLE,ex);
         if(!config.shown || !config.widgets[w.index].visible || paused) {ShowWindow(w.window,SW_HIDE);continue;}
         HWND before=GetWindow(desktopHost,GW_HWNDPREV);
@@ -252,7 +253,7 @@ void App::trayMenu() {
     HMENU menu=CreatePopupMenu();
     AppendMenuW(menu,MF_STRING,MenuSettings,L"Settings…");AppendMenuW(menu,MF_STRING,MenuPalette,L"Color tools…");
     HMENU focus=CreatePopupMenu();AppendMenuW(focus,MF_STRING,MenuFocus,config.focus.running?L"Pause":L"Start");AppendMenuW(focus,MF_STRING,MenuFocusReset,L"Reset session");AppendMenuW(focus,MF_STRING,MenuFocusNext,L"Next session");AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(focus),L"Focus timer");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);
-    AppendMenuW(menu,MF_STRING|(config.locked?MF_CHECKED:0),MenuLock,L"Lock widgets (click-through)");
+    AppendMenuW(menu,MF_STRING|(!config.locked?MF_CHECKED:0),MenuLock,L"Edit mode (move widgets)");
     AppendMenuW(menu,MF_STRING|(config.shown?MF_CHECKED:0),MenuShow,L"Show widgets");
     AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,MenuExit,L"Exit");
     POINT point{};GetCursorPos(&point);SetForegroundWindow(control);
@@ -266,7 +267,7 @@ void App::command(int id) {
     case MenuFocus:focusCommand(0);break;
     case MenuFocusReset:focusCommand(1);break;
     case MenuFocusNext:focusCommand(2);break;
-    case MenuLock:config.locked=!config.locked;render(true);repair();save();break;
+    case MenuLock:config.locked=!config.locked;draft.locked=config.locked;render(true);repair();save();if(settings){SetWindowTextW(child(EditMode),config.locked?L"Edit mode":L"Finish editing");SetWindowTextW(child(Status),config.locked?L"Layout saved. Music playback controls remain interactive.":L"Edit mode is on. Drag widgets on your desktop, then choose Finish editing.");}break;
     case MenuShow:config.shown=!config.shown;updateMedia();render(true);repair();schedule();save();break;
     case MenuExit:PostMessageW(control,WM_CLOSE,0,0);break;
     }
@@ -306,19 +307,25 @@ LRESULT CALLBACK App::WidgetProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
     if(msg==WM_NCCREATE) {w=static_cast<Widget*>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams);SetWindowLongPtrW(hwnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(w));}
     if(!w) return DefWindowProcW(hwnd,msg,wp,lp);
     auto& a=*w->app;
+    auto mediaHit=[&](POINT point){
+        if(a.config.widgets[w->index].kind!=Kind::Music)return -1;
+        const float factor=GetDpiForWindow(hwnd)/96.f*a.config.widgets[w->index].scale/100.f;
+        const float x=point.x/factor,y=point.y/factor;
+        return y>=115&&y<=172&&x>=135&&x<=325?(x<195?0:x<270?1:2):-1;
+    };
     switch(msg) {
     case WM_ERASEBKGND:return 1;
     case WM_PAINT:{PAINTSTRUCT paint{};BeginPaint(hwnd,&paint);EndPaint(hwnd,&paint);return 0;}
     case WM_MOUSEACTIVATE:return MA_NOACTIVATE;
     case WM_SYSCOMMAND:if((wp&0xfff0)==SC_MINIMIZE)return 0;break;
-    case WM_LBUTTONDOWN:if(!a.config.locked) {
-        if(a.config.widgets[w->index].kind==Kind::Music){
-            const float factor=GetDpiForWindow(hwnd)/96.f*a.config.widgets[w->index].scale/100.f;
-            const float x=GET_X_LPARAM(lp)/factor,y=GET_Y_LPARAM(lp)/factor;
-            if(y>=115&&y<=172&&x>=135&&x<=325){a.media.command(x<195?MediaCommand::Previous:x<270?MediaCommand::Toggle:MediaCommand::Next);return 0;}
-        }
+    case WM_NCHITTEST:if(a.config.locked&&a.config.widgets[w->index].kind==Kind::Music){POINT point{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};ScreenToClient(hwnd,&point);return mediaHit(point)>=0?HTCLIENT:HTTRANSPARENT;}break;
+    case WM_LBUTTONDOWN:{
+        int action=mediaHit({GET_X_LPARAM(lp),GET_Y_LPARAM(lp)});
+        if(action>=0){a.media.command(static_cast<MediaCommand>(action));return 0;}
+        if(!a.config.locked){
         w->dragging=true;GetCursorPos(&w->mouse);RECT r{};GetWindowRect(hwnd,&r);w->origin={r.left,r.top};SetCapture(hwnd);
-    }return 0;
+        }return 0;
+    }
     case WM_MOUSEMOVE:if(w->dragging) {POINT p{};GetCursorPos(&p);SetWindowPos(hwnd,nullptr,w->origin.x+p.x-w->mouse.x,w->origin.y+p.y-w->mouse.y,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);}return 0;
     case WM_LBUTTONUP:if(w->dragging) {w->dragging=false;ReleaseCapture();a.remember(*w);}return 0;
     case WM_CAPTURECHANGED:if(w->dragging) {w->dragging=false;a.remember(*w);}return 0;
@@ -411,7 +418,7 @@ void App::runChecks() {
             expect((IsWindowVisible(w.window)!=FALSE)==config.widgets[w.index].visible,"Widget visibility follows configuration");
             auto ex=GetWindowLongPtrW(w.window,GWL_EXSTYLE);
             expect((ex&WS_EX_TOPMOST)==0 && (ex&WS_EX_NOACTIVATE)!=0 && (ex&WS_EX_TOOLWINDOW)!=0,"Nonactivating non-topmost tool window");
-            expect((ex&WS_EX_TRANSPARENT)!=0,"Locked widgets pass pointer input through");
+            expect(config.widgets[w.index].kind==Kind::Music?(ex&WS_EX_TRANSPARENT)==0:(ex&WS_EX_TRANSPARENT)!=0,"Fixed layouts keep Music interactive and other widgets click-through");
         }
         auto foreground=GetForegroundWindow();repair();expect(GetForegroundWindow()==foreground,"Repair does not steal focus");
         command(MenuLock);expect(!config.locked && !(GetWindowLongPtrW(widgets[0].window,GWL_EXSTYLE)&WS_EX_TRANSPARENT),"Unlock permits dragging and interaction");
@@ -427,6 +434,11 @@ void App::runChecks() {
         RECT rect{};GetWindowRect(widgets[0].window,&rect);auto work=monitors.front().work;
         expect(wc.monitor==monitors.front().device && rect.left>=work.left && rect.top>=work.top && rect.left<work.right,"Disconnected monitor restores to primary display");
         showSettings();
+        command(MenuLock);expect(!config.locked&&applySettings()&&!config.locked,"Applying Settings retains Edit mode");command(MenuLock);
+        auto& musicWidget=widgets[static_cast<int>(Kind::Music)];RECT musicRect{};GetWindowRect(musicWidget.window,&musicRect);
+        const int musicDpi=GetDpiForWindow(musicWidget.window);
+        auto musicPoint=MAKELPARAM(musicRect.left+MulDiv(231,musicDpi,96),musicRect.top+MulDiv(137,musicDpi,96));
+        expect(SendMessageW(musicWidget.window,WM_NCHITTEST,0,musicPoint)==HTCLIENT,"Music playback controls receive clicks in a fixed layout");
         SetWindowTextW(child(Scale),L"0");expect(!applySettings(),"Settings reject out-of-range scale");
         SetWindowTextW(child(Scale),L"100");SetWindowTextW(child(Color),L"#ZZZZZZ");expect(!applySettings(),"Settings reject invalid color");
         SetWindowTextW(child(Color),L"#F2F4F1");SetWindowTextW(child(Font),L"panes missing font");

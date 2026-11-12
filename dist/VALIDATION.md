@@ -1,3 +1,10 @@
+# Panes 1.3.1 validation — 2026-11-12
+
+- 53 core checks and 140 theme/widget/DPI render previews completed successfully.
+- Isolated application checks passed, including retaining Edit mode through
+  Settings Apply and receiving Music control clicks with the layout fixed.
+- Rebuilt the executable, installer, and portable ZIP; retained user settings.
+
 # Panes 1.3.0 validation — 2026-11-12
 
 - Native executable, portable ZIP, and installer compiled with Music support.
