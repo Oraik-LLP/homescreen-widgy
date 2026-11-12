@@ -33,7 +33,8 @@ std::filesystem::path defaultRoot() {
     return result;
 }
 const wchar_t* kindName(Kind k) {
-    return k == Kind::Clock ? L"Clock" : k == Kind::Date ? L"Date" : L"Calendar";
+    static constexpr const wchar_t* names[]{L"Clock",L"Date",L"Calendar",L"Focus timer",L"Event countdown",L"Battery",L"World clock"};
+    return names[std::clamp(static_cast<int>(k),0,WidgetCount-1)];
 }
 bool leapYear(int y) { return y % 4 == 0 && (y % 100 != 0 || y % 400 == 0); }
 int daysInMonth(int y, int m) {
@@ -58,8 +59,8 @@ UINT nextTick(const SYSTEMTIME& now, bool seconds) {
     return seconds ? 1000 - now.wMilliseconds : 60000 - now.wSecond * 1000 - now.wMilliseconds;
 }
 SIZE logicalSize(Kind k, int preset, int scale, bool seconds) {
-    SIZE base = k == Kind::Clock ? SIZE{seconds ? 660L : 490L, preset ? 140L : 180L}
-              : k == Kind::Date ? SIZE{600,75} : SIZE{330,340};
+    SIZE base = k == Kind::Clock ? (preset==3 ? SIZE{300,340} : SIZE{seconds ? 660L : 490L, preset==0 ? 180L : 160L})
+              : k == Kind::Date ? SIZE{600,75} : k == Kind::Calendar ? SIZE{330,340} : SIZE{330,150};
     return {MulDiv(base.cx, scale, 100), MulDiv(base.cy, scale, 100)};
 }
 POINT clampPosition(POINT p, SIZE s, RECT work) {
@@ -97,19 +98,34 @@ LoadResult loadConfig(const std::filesystem::path& path) {
         std::ifstream stream(path);
         if (!stream) throw std::runtime_error("Cannot read settings");
         const auto obj = json::parse(stream);
-        if (!obj.is_object() || !obj.contains("version") || obj.at("version") != ConfigVersion)
+        if (!obj.is_object() || !obj.contains("version") || (obj.at("version") != 1 && obj.at("version") != ConfigVersion))
             throw std::runtime_error("Unsupported settings version");
+        result.migrated = obj.at("version") == 1;
         Config& c = result.value;
         c.shown = boolean(obj, "shown", true); c.locked = boolean(obj, "locked", true);
         c.seconds = boolean(obj, "seconds", false); c.hour24 = boolean(obj, "hour24", true);
-        c.preset = bounded(obj, "preset", 0, 0, 1);
+        c.preset = bounded(obj, "preset", 0, 0, ThemeCount-1);
+        if(obj.contains("wallpaperMatch")&&obj["wallpaperMatch"].is_array())
+            for(size_t i=0;i<std::min(obj["wallpaperMatch"].size(),c.wallpaperMatch.size());++i)if(obj["wallpaperMatch"][i].is_boolean())c.wallpaperMatch[i]=obj["wallpaperMatch"][i].get<bool>();
+        auto timestamp=[](const json& o,const char* key,long long fallback){if(!o.contains(key)||!o[key].is_number_integer())return fallback;return std::clamp(o[key].get<long long>(),0LL,265046774399LL);};
+        c.eventTitle=stringValue(obj,"eventTitle",c.eventTitle,80);c.city=stringValue(obj,"city",c.city,60);c.zone=stringValue(obj,"zone",L"UTC",128);c.eventUtc=timestamp(obj,"eventUtc",0);
+        if(obj.contains("focus")&&obj["focus"].is_object()) {
+            const auto& f=obj["focus"];c.focus.focusMinutes=bounded(f,"focusMinutes",25,1,240);c.focus.breakMinutes=bounded(f,"breakMinutes",5,1,120);
+            c.focus.isBreak=boolean(f,"isBreak",false);c.focus.running=boolean(f,"running",false);c.focus.pending=boolean(f,"pending",false);
+            c.focus.deadline=timestamp(f,"deadline",0);c.focus.remaining=bounded(f,"remaining",1500,0,14400);
+            if(c.focus.running&&!c.focus.deadline)c.focus.running=false;
+        }
+        auto colors=[&](const char* key,std::vector<unsigned>& out,size_t max){if(obj.contains(key)&&obj[key].is_array())for(const auto& v:obj[key]){unsigned color{};if(v.is_string()&&parseColor(wide(v.get<std::string>()),color)&&std::find(out.begin(),out.end(),color)==out.end())out.push_back(color);if(out.size()==max)break;}};
+        colors("recent",c.recent,12);colors("favorites",c.favorites,8);
         if (obj.contains("widgets") && obj.at("widgets").is_array()) {
             for (const auto& entry : obj.at("widgets")) {
                 if (!entry.is_object()) continue;
-                int id = bounded(entry, "id", -1, -1, 2);
-                if (id < 0) continue;
+                if(!entry.contains("id")||!entry["id"].is_number_integer())continue;
+                auto rawId=entry["id"].get<long long>();if(rawId<0||rawId>=WidgetCount)continue;
+                int id=static_cast<int>(rawId);
                 auto& w = c.widgets[id];
-                w.visible = boolean(entry, "visible", true);
+                w.visible = boolean(entry, "visible", id < 3);
+                w.customColors = boolean(entry,"customColors",false);
                 w.positioned = boolean(entry, "positioned", false);
                 w.monitor = stringValue(entry, "monitor", L"", 128);
                 w.x = bounded(entry, "x", 0, -50000, 50000); w.y = bounded(entry, "y", 0, -50000, 50000);
@@ -129,12 +145,16 @@ LoadResult loadConfig(const std::filesystem::path& path) {
 }
 void saveConfig(const std::filesystem::path& path, const Config& c) {
     json obj{{"version",ConfigVersion},{"shown",c.shown},{"locked",c.locked},{"seconds",c.seconds},{"hour24",c.hour24},{"preset",c.preset}};
+    obj["wallpaperMatch"]=c.wallpaperMatch;obj["eventTitle"]=utf8(c.eventTitle);obj["eventUtc"]=c.eventUtc;obj["zone"]=utf8(c.zone);obj["city"]=utf8(c.city);
+    const auto& f=c.focus;obj["focus"]={{"focusMinutes",f.focusMinutes},{"breakMinutes",f.breakMinutes},{"isBreak",f.isBreak},{"running",f.running},{"pending",f.pending},{"deadline",f.deadline},{"remaining",f.remaining}};
+    obj["recent"]=json::array();for(auto color:c.recent)obj["recent"].push_back(utf8(colorText(color)));
+    obj["favorites"]=json::array();for(auto color:c.favorites)obj["favorites"].push_back(utf8(colorText(color)));
     obj["widgets"] = json::array();
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < WidgetCount; ++i) {
         const auto& w = c.widgets[i];
         obj["widgets"].push_back({{"id",i},{"visible",w.visible},{"positioned",w.positioned},{"monitor",utf8(w.monitor)},
             {"x",w.x},{"y",w.y},{"scale",w.scale},{"opacity",w.opacity},{"font",utf8(w.font)},
-            {"color",utf8(colorText(w.color))},{"accent",utf8(colorText(w.accent))}});
+            {"color",utf8(colorText(w.color))},{"accent",utf8(colorText(w.accent))},{"customColors",w.customColors}});
     }
     std::filesystem::create_directories(path.parent_path());
     auto temporary = path; temporary += L".tmp";
@@ -142,6 +162,10 @@ void saveConfig(const std::filesystem::path& path, const Config& c) {
         std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
         stream << obj.dump(2) << '\n'; stream.flush();
         if (!stream) throw std::runtime_error("Cannot write settings");
+    }
+    if(std::filesystem::exists(path)) {
+        std::ifstream prior(path);json old=json::parse(prior,nullptr,false);
+        if(old.is_object()&&old.value("version",0)==1){auto backup=path;backup+=L".v1.bak";if(!std::filesystem::exists(backup))std::filesystem::copy_file(path,backup);}
     }
     // Write-through replacement keeps the previous settings if the rename fails.
     if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))

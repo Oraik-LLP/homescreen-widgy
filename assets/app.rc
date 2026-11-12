@@ -1,9 +1,16 @@
 #include <windows.h>
 1 RT_MANIFEST "app.manifest"
 1 ICON "app.ico"
+101 RCDATA "fonts/Inter.ttf"
+102 RCDATA "fonts/Manrope.ttf"
+103 RCDATA "fonts/DMSans.ttf"
+104 RCDATA "fonts/SpaceGrotesk.ttf"
+105 RCDATA "fonts/PlusJakartaSans.ttf"
+106 RCDATA "fonts/Outfit.ttf"
+107 RCDATA "fonts/GoogleSansFlex.ttf"
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,0
- PRODUCTVERSION 1,0,0,0
+ FILEVERSION 1,2,0,0
+ PRODUCTVERSION 1,2,0,0
  FILEFLAGSMASK 0x3fL
  FILEOS VOS_NT_WINDOWS32
  FILETYPE VFT_APP
@@ -14,8 +21,8 @@ BEGIN
   BEGIN
    VALUE "FileDescription", "panes\0"
    VALUE "ProductName", "panes\0"
-   VALUE "FileVersion", "1.0.0\0"
-   VALUE "ProductVersion", "1.0.0\0"
+   VALUE "FileVersion", "1.2.0\0"
+   VALUE "ProductVersion", "1.2.0\0"
    VALUE "OriginalFilename", "panes.exe\0"
   END
  END

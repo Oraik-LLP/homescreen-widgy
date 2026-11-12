@@ -1,4 +1,4 @@
-panes 1.0.0
+panes 1.2.0
 
 nlohmann/json v3.12.0 — MIT License. Full license: json.LICENSE.
 Source: https://github.com/nlohmann/json/tree/v3.12.0
@@ -14,5 +14,16 @@ Inno Setup creates the installer. Its compiler is not included in the app.
 Source: https://jrsoftware.org/
 
 Windows graphics and shell libraries are supplied by Windows.
-Fonts are resolved from the user's installed fonts. No fonts, wallpapers,
-Rainmeter source code, or third-party skin artwork are bundled.
+Inter (Rasmus Andersson), Manrope (Mikhail Sharanda), DM Sans (Colophon Foundry),
+Space Grotesk (Florian Karsten), Plus Jakarta Sans (Tokotype), Outfit (Outfit
+Project Authors), and Google Sans Flex (Google Sans Flex Project Authors) are
+bundled as variable TrueType fonts. Light (300), regular (400), and semibold
+(600) weights are selected through DirectWrite variation axes. Each family is
+licensed under the SIL Open Font License 1.1. Full licenses are included in
+licenses/*-OFL.txt. Official source files and licenses:
+https://github.com/google/fonts/tree/main/ofl/
+See licenses/font-sources.json for downloaded file URLs and SHA-256 hashes.
+Fonts are loaded privately from executable resources, without system installation.
+The separate Google Sans Flex trademark notice is included in
+licenses/googlesansflex-TRADEMARKS.md. Panes uses no Google branding or artwork.
+No wallpapers, Rainmeter code, or OPPO/OnePlus artwork or fonts are bundled.

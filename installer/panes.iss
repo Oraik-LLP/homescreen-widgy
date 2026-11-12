@@ -1,4 +1,4 @@
-#define AppVersion "1.0.0"
+#define AppVersion "1.2.0"
 [Setup]
 AppId={{256D9795-5629-48D9-881D-E0BB70DB1F93}
 AppName=panes
@@ -34,6 +34,7 @@ Source: "..\dist\panes.svg"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\panes-icon.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\VALIDATION.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\third_party\json.LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs

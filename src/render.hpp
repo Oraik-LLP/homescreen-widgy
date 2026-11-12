@@ -1,7 +1,7 @@
 #pragma once
 #include "model.hpp"
 #include <d2d1.h>
-#include <dwrite.h>
+#include <dwrite_3.h>
 #include <map>
 #include <memory>
 
@@ -12,6 +12,9 @@ public:
     ID2D1Factory* d2d{};
     IDWriteFactory* text{};
     IDWriteFontCollection* fonts{};
+    IDWriteFactory5* modern{};
+    IDWriteInMemoryFontFileLoader* memoryLoader{};
+    IDWriteFontCollection1* bundled{};
     Graphics();
     ~Graphics();
     std::wstring resolveFont(const std::wstring& requested) const;
@@ -33,7 +36,8 @@ public:
     ~Surface();
     Surface(const Surface&) = delete;
     void clearFormats();
-    void draw(HWND window, const WidgetConfig& widget, const Config& config, const SYSTEMTIME& now, bool editing);
+    void draw(HWND window, const WidgetConfig& widget, const Config& config, const SYSTEMTIME& now, bool editing, bool present = true, UINT forcedDpi = 0);
+    void preview(HDC destination, RECT box) const;
     void saveBmp(const std::filesystem::path& path) const;
     SIZE size() const { return pixels; }
 };

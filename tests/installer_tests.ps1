@@ -3,7 +3,7 @@ $projectRoot = Split-Path $PSScriptRoot -Parent
 $testRoot = Join-Path $projectRoot 'test-output/installer'
 $installRoot = Join-Path $testRoot 'app'
 $dataRoot = Join-Path $testRoot 'data'
-$setup = Join-Path $projectRoot 'dist/panes-Setup-1.0.0-x64.exe'
+$setup = Join-Path $projectRoot 'dist/panes-Setup-1.2.0-x64.exe'
 New-Item -ItemType Directory -Force $testRoot,$dataRoot | Out-Null
 $registryPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $prior = (Get-ItemProperty -LiteralPath $registryPath -ErrorAction SilentlyContinue).panes

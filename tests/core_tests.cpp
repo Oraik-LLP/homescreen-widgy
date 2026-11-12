@@ -1,4 +1,5 @@
 #include "../src/model.hpp"
+#include "../src/wallpaper.hpp"
 #include <fstream>
 #include <iostream>
 
@@ -39,6 +40,52 @@ int wmain(int argc,wchar_t** argv) {
         loaded=loadConfig(path);require(!loaded.writable&&!loaded.warning.empty(),"Preserve malformed configuration");
         {std::ifstream f(path);std::string data;f>>data;require(data=="{broken","Bad settings are never overwritten on load");}
         require(logicalSize(Kind::Clock,0,100,false).cx<logicalSize(Kind::Clock,0,100,true).cx,"Seconds receive more surface space");
+        Config expanded;applyTheme(expanded,3);expanded.widgets[3].visible=true;expanded.widgets[5].customColors=true;
+        expanded.wallpaperMatch[3]=true;expanded.eventTitle=L"Launch — 日本";expanded.eventUtc=utcNow()+90000;
+        expanded.city=L"New York";expanded.zone=L"Eastern Standard Time";expanded.focus.running=true;expanded.focus.deadline=utcNow()+500;
+        expanded.recent={0x123456,0xABCDEF};expanded.favorites={0xFFFFFF};
+        saveConfig(path,expanded);loaded=loadConfig(path);
+        require(loaded.value.widgets.size()==7&&!loaded.value.widgets[4].visible&&loaded.value.widgets[3].visible,"New widgets are optional with stable IDs");
+        require(loaded.value.wallpaperMatch[3]&&loaded.value.preset==3&&loaded.value.widgets[5].customColors,"Theme and manual colors persist");
+        require(loaded.value.eventTitle==expanded.eventTitle&&loaded.value.eventUtc==expanded.eventUtc&&loaded.value.zone==expanded.zone,"Event and time zone round trip");
+        require(loaded.value.focus.deadline==expanded.focus.deadline&&loaded.value.focus.running&&loaded.value.recent==expanded.recent&&loaded.value.favorites==expanded.favorites,"Timer deadline and palettes persist");
+        expanded.widgets[0].x=123;expanded.widgets[0].scale=135;expanded.widgets[0].opacity=71;expanded.widgets[0].customColors=true;
+        applyTheme(expanded,2);require(expanded.widgets[0].x==123&&expanded.widgets[0].scale==135&&expanded.widgets[0].opacity==71&&!expanded.widgets[0].customColors,"Theme changes retain placement, size and opacity");
+        auto backupPath=std::filesystem::path(path.wstring()+L".v1.bak");std::string priorBackup;
+        if(std::filesystem::exists(backupPath)){std::ifstream prior(backupPath);priorBackup.assign(std::istreambuf_iterator<char>(prior),{});}
+        {std::ofstream f(path);f<<R"({"version":1,"preset":1,"widgets":[{"id":0,"x":37,"font":"Consolas","color":"#123456"}]})";}
+        loaded=loadConfig(path);require(loaded.migrated&&loaded.value.widgets[0].font==L"Consolas"&&loaded.value.widgets[0].color==0x123456&&!loaded.value.widgets[3].visible,"Version 1 appearance is retained");
+        saveConfig(path,loaded.value);require(std::filesystem::exists(path.wstring()+L".v1.bak"),"Version 1 backup is written before replacement");
+        {std::ifstream f(std::filesystem::path(path.wstring()+L".v1.bak"));std::string data((std::istreambuf_iterator<char>(f)),{});require(priorBackup.empty()?data.find("\"version\":1")!=std::string::npos:data==priorBackup,"Migration backup retains original bytes");}
+        {std::ofstream f(path);f<<R"({"version":2,"widgets":[{"id":999,"visible":true}],"favorites":["#123456","#123456","invalid"]})";}
+        loaded=loadConfig(path);require(!loaded.value.widgets[6].visible&&loaded.value.favorites.size()==1,"Unknown widget IDs and invalid/duplicate colors are ignored");
+        FocusState focus;focusAction(focus,0,1000);require(focus.running&&focus.deadline==2500,"Focus start stores an absolute deadline");
+        focusAction(focus,0,1040);require(!focus.running&&focus.remaining==1460,"Focus pause retains remaining seconds");
+        focusAction(focus,0,2000);require(focus.deadline==3460,"Focus resumes from remaining duration");
+        require(finishFocus(focus,4000)&&focus.pending&&focus.remaining==0&&!focus.running,"Focus catches up after sleep or restart");
+        require(!finishFocus(focus,4100),"Completed focus does not complete twice");
+        focusAction(focus,2,4100);require(focus.isBreak&&!focus.running&&focus.remaining==300&&!focus.pending,"Next session waits for explicit start");
+        require(countdownText(0,1000)==L"Set a date"&&countdownText(1000,1000)==L"Reached","Countdown unset and exact boundary");
+        require(countdownText(1100,1000).starts_with(L"Today")&&countdownText(91000,1000).starts_with(L"1d"),"Countdown final day and days remaining");
+        SYSTEM_POWER_STATUS power{};power.BatteryFlag=128;require(batteryText(power,true)==L"AC power","Desktop without battery");
+        power.BatteryFlag=255;power.BatteryLifePercent=255;require(batteryText(power,true)==L"Unavailable"&&batteryText(power,false)==L"Unavailable","Unknown power status");
+        power.BatteryFlag=8;power.BatteryLifePercent=42;require(batteryText(power,true)==L"42%","Battery percentage");
+        SYSTEMTIME utc{};utc.wYear=2026;utc.wMonth=1;utc.wDay=15;utc.wHour=12;SYSTEMTIME zoned{};
+        require(zoneTime(L"Eastern Standard Time",utc,zoned)&&zoned.wHour==7,"World clock winter standard time");
+        utc.wMonth=7;require(zoneTime(L"Eastern Standard Time",utc,zoned)&&zoned.wHour==8,"World clock summer daylight saving");
+        utc.wHour=2;require(zoneTime(L"Eastern Standard Time",utc,zoned)&&zoned.wDay==14,"World clock previous day");
+        require(!zoneTime(L"missing-zone",utc,zoned)&&zoned.wHour==utc.wHour,"Unknown zone falls back to UTC");
+        long long target{};require(!localTarget(L"2026-02-30 12:00",target)&&!localTarget(L"2026-01-01 25:00",target),"Invalid event dates are rejected");
+        require(localTarget(L"2026-11-12 14:30",target)&&targetText(target)==L"2026-11-12 14:30","Local event target conversion round trip");
+        std::vector<unsigned> colors;for(unsigned i=0;i<20;++i)rememberColor(colors,i,12);rememberColor(colors,15,12);
+        require(colors.size()==12&&colors[0]==15&&std::count(colors.begin(),colors.end(),15)==1,"Recent colors are bounded and deduplicated");
+        WallpaperImage image;image.valid=true;image.bounds={0,0,1000,800};image.desktop=image.bounds;image.accent=0x8899AA;
+        image.background=0;auto matched=matchWallpaper(Config{}.widgets[0],{100,100,400,250},image);require(matched.color==0xF8F7F4,"Dark wallpaper chooses light text");
+        image.background=0xFFFFFF;matched=matchWallpaper(Config{}.widgets[0],{100,100,400,250},image);require(matched.color==0x202520,"Light wallpaper chooses dark text");
+        image.width=8;image.height=8;image.originalWidth=1000;image.originalHeight=800;for(int i=0;i<64;++i)image.pixels.push_back(i%2?0:0xFFFFFF);
+        matched=matchWallpaper(Config{}.widgets[0],{0,0,1000,800},image);require(matched.backing,"Busy wallpaper adds a contrast backing");
+        auto manual=Config{}.widgets[0];manual.customColors=true;manual.color=0x123456;require(matchWallpaper(manual,{0,0,1000,800},image).color==0x123456,"Manual colors override wallpaper matching");
+        image.valid=false;manual.customColors=false;require(matchWallpaper(manual,{0,0,1000,800},image).color==0x123456,"Unreadable wallpaper retains theme colors");
         saveConfig(path,Config{});
         std::cout<<checks<<" checks passed\n";return 0;
     }catch(const std::exception& e){std::cerr<<"FAILED: "<<e.what()<<'\n';return 1;}

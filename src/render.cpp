@@ -8,11 +8,24 @@ Graphics::Graphics() {
     check(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d));
     check(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&text)));
     check(text->GetSystemFontCollection(&fonts));
+    check(text->QueryInterface(__uuidof(IDWriteFactory5),reinterpret_cast<void**>(&modern)));
+    check(modern->CreateInMemoryFontFileLoader(&memoryLoader));check(text->RegisterFontFileLoader(memoryLoader));
+    IDWriteFontSetBuilder1* builder{};check(modern->CreateFontSetBuilder(&builder));
+    for(int id=101;id<=107;++id){
+        auto resource=FindResourceW(nullptr,MAKEINTRESOURCEW(id),RT_RCDATA);
+        if(!resource){release(builder);throw std::runtime_error("Bundled font resource missing");}
+        auto data=LockResource(LoadResource(nullptr,resource));auto bytes=SizeofResource(nullptr,resource);
+        IDWriteFontFile* file{};check(memoryLoader->CreateInMemoryFontFileReference(text,data,bytes,nullptr,&file));
+        auto hr=builder->AddFontFile(file);release(file);check(hr);
+    }
+    IDWriteFontSet* set{};check(builder->CreateFontSet(&set));release(builder);
+    auto hr=modern->CreateFontCollectionFromFontSet(set,&bundled);release(set);check(hr);
 }
-Graphics::~Graphics() { release(fonts); release(text); release(d2d); }
+Graphics::~Graphics() { release(bundled);if(memoryLoader)text->UnregisterFontFileLoader(memoryLoader);release(memoryLoader);release(modern);release(fonts); release(text); release(d2d); }
 std::wstring Graphics::resolveFont(const std::wstring& requested) const {
     // These Windows face names belong to the Segoe UI family in DirectWrite.
     if(requested==L"Segoe UI Light" || requested==L"Segoe UI Semilight") return requested;
+    for(auto family:BundledFontFamilies)for(auto suffix:{L"",L" Light",L" Semibold"})if(requested==std::wstring(family)+suffix)return requested;
     UINT32 index{}; BOOL exists{};
     if (SUCCEEDED(fonts->FindFamilyName(requested.c_str(), &index, &exists)) && exists) return requested;
     return L"Segoe UI";
@@ -55,18 +68,28 @@ void Surface::text(const std::wstring& value, const std::wstring& family, float 
         auto weight=DWRITE_FONT_WEIGHT_NORMAL;
         if(font==L"Segoe UI Light") {familyName=L"Segoe UI";weight=DWRITE_FONT_WEIGHT_LIGHT;}
         else if(font==L"Segoe UI Semilight") {familyName=L"Segoe UI";weight=DWRITE_FONT_WEIGHT_SEMI_LIGHT;}
-        check(graphics.text->CreateTextFormat(familyName.c_str(), nullptr, weight, DWRITE_FONT_STYLE_NORMAL,
+        IDWriteFontCollection* collection=nullptr;
+        for(auto family:BundledFontFamilies)if(font==family||font==std::wstring(family)+L" Light"||font==std::wstring(family)+L" Semibold"){
+            familyName=family;collection=graphics.bundled;
+            if(font.ends_with(L" Light"))weight=DWRITE_FONT_WEIGHT_LIGHT;
+            else if(font.ends_with(L" Semibold"))weight=DWRITE_FONT_WEIGHT_SEMI_BOLD;
+        }
+        check(graphics.text->CreateTextFormat(familyName.c_str(), collection, weight, DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", &format));
+        if(collection){IDWriteTextFormat3* variable{};if(SUCCEEDED(format->QueryInterface(__uuidof(IDWriteTextFormat3),reinterpret_cast<void**>(&variable)))){
+            DWRITE_FONT_AXIS_VALUE axes[]{{DWRITE_FONT_AXIS_TAG_WEIGHT,static_cast<float>(weight)}};check(variable->SetFontAxisValues(axes,1));release(variable);}}
         format->SetTextAlignment(centered ? DWRITE_TEXT_ALIGNMENT_CENTER : DWRITE_TEXT_ALIGNMENT_LEADING);
         format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        DWRITE_TRIMMING trim{DWRITE_TRIMMING_GRANULARITY_CHARACTER,0,0};IDWriteInlineObject* ellipsis{};
+        if(SUCCEEDED(graphics.text->CreateEllipsisTrimmingSign(format,&ellipsis))){format->SetTrimming(&trim,ellipsis);release(ellipsis);}
         it = formats.emplace(key, format).first;
     }
     setColor(color);
     target->DrawText(value.c_str(), static_cast<UINT32>(value.size()), it->second, box, brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
-void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SYSTEMTIME& now, bool editing) {
-    const UINT dpi = GetDpiForWindow(window);
+void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SYSTEMTIME& now, bool editing, bool present, UINT forcedDpi) {
+    const UINT dpi = forcedDpi ? forcedDpi : GetDpiForWindow(window);
     auto logical = logicalSize(w.kind, c.preset, w.scale, c.seconds);
     SIZE size{MulDiv(logical.cx, dpi,96), MulDiv(logical.cy,dpi,96)};
     ensure(size);
@@ -76,14 +99,22 @@ void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SY
     target->SetTransform(D2D1::Matrix3x2F::Scale(factor, factor));
     const auto base = logicalSize(w.kind, c.preset,100,c.seconds);
     const float width = static_cast<float>(base.cx), height = static_cast<float>(base.cy);
-    if (editing) {
-        setColor(0x15231D, .72f);
+    if (editing || c.preset==4 || w.backing) {
+        setColor(0x15231D, editing ? .72f : w.backing ? .84f : .65f);
         target->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(1,1,width-1,height-1),12,12), brush);
         setColor(w.accent,.8f);
         target->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(1,1,width-1,height-1),12,12),brush,1);
     }
     if (w.kind == Kind::Clock) {
-        if (c.preset == 0) {
+        if(c.preset==3){
+            auto time=clockText(now,c.hour24,c.seconds);
+            text(time.substr(0,2),w.font,144,D2D1::RectF(6,0,width-6,162),w.color);
+            text(time.substr(3,2),w.font,144,D2D1::RectF(6,151,width-6,310),w.accent);
+            if(c.seconds)text(time.substr(6,2),w.font,19,D2D1::RectF(12,310,width-12,338),w.color);
+        } else if(c.preset==2){
+            text(clockText(now,c.hour24,c.seconds),w.font,c.seconds?85.f:108.f,D2D1::RectF(12,0,width-12,height-36),w.color,false);
+            text(L"MAKE TIME",w.font,12,D2D1::RectF(18,height-36,width-18,height-6),w.accent,false);
+        } else if (c.preset == 0) {
             const auto time = clockText(now,c.hour24,c.seconds);
             const float numberSize = c.seconds ? 124.f : 154.f;
             const float cell = c.seconds ? 204.f : 230.f;
@@ -96,19 +127,19 @@ void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SY
             setColor(w.accent,.85f);
             target->DrawLine(D2D1::Point2F(width*.35f,height-14),D2D1::Point2F(width*.65f,height-14),brush,2);
         }
-        if(!c.hour24) text(now.wHour < 12 ? L"AM" : L"PM",L"Segoe UI",11,D2D1::RectF(width-44,height-30,width-8,height-10),w.accent);
+        if(!c.hour24) text(now.wHour < 12 ? L"AM" : L"PM",w.font,11,D2D1::RectF(width-44,height-30,width-8,height-10),w.accent);
     } else if(w.kind == Kind::Date) {
         wchar_t date[180]{};
         GetDateFormatEx(LOCALE_NAME_USER_DEFAULT,0,&now,L"dddd  '|'  MMMM dd yyyy",date,180,nullptr);
         text(date,w.font,27,D2D1::RectF(8,6,width-8,height-8),w.color);
-    } else {
+    } else if(w.kind == Kind::Calendar) {
         wchar_t month[100]{};
         GetDateFormatEx(LOCALE_NAME_USER_DEFAULT,0,&now,L"MMMM",month,100,nullptr);
         text(month,w.font,46,D2D1::RectF(12,4,width-12,65),w.accent);
-        text(std::to_wstring(now.wYear),L"Segoe UI",12,D2D1::RectF(10,63,width-10,83),w.color);
+        text(std::to_wstring(now.wYear),w.font,12,D2D1::RectF(10,63,width-10,83),w.color);
         static constexpr const wchar_t* names[]{L"Su",L"Mo",L"Tu",L"We",L"Th",L"Fr",L"Sa"};
         const float left=15, cell=(width-30)/7;
-        for(int i=0;i<7;++i) text(names[i],L"Segoe UI",12,D2D1::RectF(left+i*cell,92,left+(i+1)*cell,117),w.color);
+        for(int i=0;i<7;++i) text(names[i],w.font,12,D2D1::RectF(left+i*cell,92,left+(i+1)*cell,117),w.color);
         const int offset = firstWeekday(now.wYear, now.wMonth), count=daysInMonth(now.wYear,now.wMonth);
         for(int day=1; day<=count; ++day) {
             int slot=offset+day-1, col=slot%7, row=slot/7;
@@ -117,17 +148,43 @@ void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SY
                 setColor(w.accent,.18f); target->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x+cell/2,y+16),14,14),brush);
                 setColor(w.accent); target->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(x+cell/2,y+16),14,14),brush,1.2f);
             }
-            text(std::to_wstring(day),L"Segoe UI",14,D2D1::RectF(x,y,x+cell,y+32),day==now.wDay ? w.accent : w.color);
+            text(std::to_wstring(day),w.font,14,D2D1::RectF(x,y,x+cell,y+32),day==now.wDay ? w.accent : w.color);
         }
+    }
+    else {
+        std::wstring title,main,detail;float progress=-1;
+        if(w.kind==Kind::Focus){
+            const auto left=focusRemaining(c.focus,utcNow());wchar_t buffer[40]{};swprintf_s(buffer,L"%02lld:%02lld",left/60,left%60);main=buffer;
+            title=c.focus.isBreak?L"BREAK":L"FOCUS";detail=c.focus.running?L"In progress":left==0?L"Session complete":L"Ready when you are";
+            progress=1-static_cast<float>(left)/((c.focus.isBreak?c.focus.breakMinutes:c.focus.focusMinutes)*60);
+        }else if(w.kind==Kind::Countdown){title=c.eventTitle;main=countdownText(c.eventUtc,utcNow());detail=c.eventUtc?targetText(c.eventUtc):L"Choose an event in Settings";}
+        else if(w.kind==Kind::Battery){SYSTEM_POWER_STATUS power{};bool ok=GetSystemPowerStatus(&power)!=FALSE;title=L"BATTERY";main=batteryText(power,ok);
+            if(ok&&power.BatteryFlag!=255&&!(power.BatteryFlag&128)&&power.BatteryLifePercent!=255){detail=(power.BatteryFlag&8)?L"Charging":power.ACLineStatus==1?L"Plugged in":L"On battery";progress=power.BatteryLifePercent/100.f;}}
+        else {SYSTEMTIME utc{},local{};GetSystemTime(&utc);bool ok=zoneTime(c.zone,utc,local);title=c.city;main=clockText(local,c.hour24,false);
+            SYSTEMTIME today=now,other=local;today.wHour=today.wMinute=today.wSecond=today.wMilliseconds=0;other.wHour=other.wMinute=other.wSecond=other.wMilliseconds=0;
+            auto days=(systemSeconds(other)-systemSeconds(today))/86400;detail=days==0?L"Today":days>0?L"Tomorrow":L"Yesterday";
+            if(!c.hour24)detail+=local.wHour<12?L" · AM":L" · PM";if(!ok)detail=L"UTC · zone unavailable";}
+        text(title,w.font,14,D2D1::RectF(18,8,width-18,34),w.accent,false);
+        text(main,w.font,w.kind==Kind::Countdown?29.f:48.f,D2D1::RectF(16,32,width-16,99),w.color,false);
+        text(detail,w.font,12,D2D1::RectF(18,103,width-18,128),w.color,false);
+        if(progress>=0){progress=std::clamp(progress,0.f,1.f);setColor(w.accent,.2f);target->DrawLine(D2D1::Point2F(18,140),D2D1::Point2F(width-18,140),brush,2);setColor(w.accent);target->DrawLine(D2D1::Point2F(18,140),D2D1::Point2F(18+(width-36)*progress,140),brush,2);}
     }
     const HRESULT hr=target->EndDraw();
     if(hr==D2DERR_RECREATE_TARGET) { release(brush); release(target); return; }
     check(hr);
+    if(!present)return;
     POINT origin{}; SIZE dimensions=pixels; RECT rect{}; GetWindowRect(window,&rect);
     POINT position{rect.left,rect.top};
     BLENDFUNCTION blend{AC_SRC_OVER,0,static_cast<BYTE>(w.opacity*255/100),AC_SRC_ALPHA};
     if(!UpdateLayeredWindow(window,nullptr,&position,&dimensions,dc,&origin,0,&blend,ULW_ALPHA))
         throw std::runtime_error("Cannot update transparent widget window");
+}
+void Surface::preview(HDC destination,RECT box) const {
+    if(!bitmap)return;
+    float scale=std::min(static_cast<float>(box.right-box.left)/pixels.cx,static_cast<float>(box.bottom-box.top)/pixels.cy);
+    int width=static_cast<int>(pixels.cx*scale),height=static_cast<int>(pixels.cy*scale);
+    BLENDFUNCTION blend{AC_SRC_OVER,0,255,AC_SRC_ALPHA};
+    GdiAlphaBlend(destination,box.left+(box.right-box.left-width)/2,box.top+(box.bottom-box.top-height)/2,width,height,dc,0,0,pixels.cx,pixels.cy,blend);
 }
 void Surface::saveBmp(const std::filesystem::path& path) const {
     BITMAP object{}; GetObject(bitmap,sizeof(object),&object);

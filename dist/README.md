@@ -3,24 +3,28 @@
 Four panes, one quiet desktop. The original four-pane mark is available as
 `assets/panes.svg`, `assets/app.ico`, and `assets/panes-icon-1024.png`.
 
-A small native Windows 11 x64 app for a clock, date, and month calendar.
+A small native Windows 11 x64 app for a clock, date, month calendar, focus timer,
+event countdown, battery indicator, and world clock.
 Built with C++20, Win32, Direct2D and DirectWrite. Works offline and does not
 require Rainmeter, .NET, WebView, or a browser process.
 
 ## Install and use
 
-[Download the Windows installer](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-Setup-1.0.0-x64.exe),
+[Download the Windows installer](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-Setup-1.2.0-x64.exe),
 [standalone EXE](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes.exe),
-or [portable ZIP](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-1.0.0-x64.zip).
+or [portable ZIP](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-1.2.0-x64.zip).
 
-Run `dist/panes-Setup-1.0.0-x64.exe`. Installation is per user and
+Run `dist/panes-Setup-1.2.0-x64.exe`. Installation is per user and
 does not require administrator rights. Launch at sign-in and a desktop
 shortcut are optional and off by default. The ZIP can also run directly.
 
 The first launch opens Settings. Select a widget to adjust its font, size,
-opacity, colors and visibility. Clock format, seconds and layout preset
+opacity, colors and visibility. Clock format, seconds and theme
 apply globally. Click **Apply** to save, or **Done** to save and close.
-Changing the selected widget also applies the current settings. Closing
+Changing the selected widget also applies the current settings.
+Select **Add Widget…** for visual previews of every widget; click one to
+enable it and select its settings. New widgets use sensible starting positions.
+Settings has Widgets, Appearance, and Color tools pages, with a scrollable body. Closing
 Settings with X or Escape discards unapplied edits and leaves widgets running.
 
 Double-click the tray icon for Settings. Right-click it to unlock,
@@ -28,16 +32,53 @@ show/hide, or exit the widgets. Unlock to drag widgets. Lock again to make
 them click-through so desktop icons and selection work normally.
 
 Widgets sit above the wallpaper and behind normal applications. There is
-no always-on-top mode. The Windows wallpaper is not changed. Thin and
-Compact are original presets inspired by minimalist desktop clocks; no
-reference wallpaper, skin artwork, or font files are included.
+no always-on-top mode. The Windows wallpaper is not changed. Minimal and Compact retain the quiet clock styles. Editorial, Stacked, and Soft
+add expressive static typography and coordinated colors inspired by Flux-style
+personalization. Panes uses original layouts, with privately bundled Inter,
+Manrope, and DM Sans fonts. Theme changes retain positions, sizes, opacity,
+and widget visibility. No wallpaper or third-party theme artwork is included.
 
 Settings live in `%LOCALAPPDATA%/panes/settings.json`. Positions
 are stored in monitor-relative DIPs. If a monitor disappears, its widgets
-move to the primary monitor. An unavailable font falls back to Segoe UI.
+move to the primary monitor. An unavailable font falls back to Segoe UI. Version 1 settings migrate
+automatically with the original saved as settings.json.v1.bak.
 Invalid or future-version settings are preserved and defaults run without
 overwriting them. **Reset layout** makes a backup before recovering such a file.
 Uninstall removes the app and its sign-in entry, and keeps your settings.
+
+## New in 1.2
+
+- **Add Widget…** opens a gallery with live previews of all seven widget types.
+  Select a preview to enable and configure that widget. Existing widgets are
+  marked in the gallery and can be selected from the same place.
+- Appearance now includes Google Sans Flex, Space Grotesk, Plus Jakarta Sans,
+  and Outfit, alongside Inter, Manrope, and DM Sans. Each family exposes light,
+  regular, and semibold styles; all are loaded privately and have SIL OFL notices
+  bundled with the app. Calendar labels follow the selected font too.
+
+## New in 1.1
+
+- Appearance includes five theme previews, nine bundled font styles, text/accent
+  swatches, a native color chooser, and ten theme palette swatches.
+- Color tools opens directly from the tray or with panes.exe --palette. Capture
+  any screen color, copy HEX/RGB, keep 12 recent colors and eight favorites,
+  and assign colors to a widget. Escape or right-click cancels the eyedropper.
+  Recent colors/favorites save immediately; widget assignments require Apply/Done.
+- Match wallpaper is optional for each theme. Panes reads the static wallpaper
+  per monitor, extracts a muted accent and contrast-aware text locally on a
+  background worker, and caches thumbnails of at most 128 pixels per side.
+  Notifications and a 60-second identity check detect wallpaper changes without
+  repeated decoding. Manual widget colors override matching; Use theme colors
+  restores it. Busy backgrounds receive a subtle backing. Live wallpapers use
+  Windows' static image if available; unreadable images retain preset colors.
+- Four new widgets start hidden. Focus defaults to 25/5 minutes and has Start,
+  Pause, Reset, and Next session in Settings and the tray. It remembers an
+  absolute deadline across sleep/restarts and sends one silent completion notice.
+  Countdown accepts a local YYYY-MM-DD HH:MM target, stores UTC, and shows
+  Today/Reached at the boundary. Battery reports charging/AC/unavailable states.
+  World clock uses Windows time zone keys and automatic daylight saving.
+- Locked widgets remain click-through. Focus controls are in Settings/the tray
+  so widgets can stay quiet and noninteractive on the desktop.
 
 ## Build
 
@@ -101,8 +142,7 @@ the desktop can be found. Session lock and suspension stop widget timers.
 
 Explorer's desktop hierarchy is an implementation detail that Windows updates
 may change. See `VALIDATION.md` for actual validation and remaining manual checks.
-Weather, system meters, animation, analog clocks and Rainmeter-skin imports
-are outside this release.
+Weather, ongoing animation, analog clocks and Rainmeter-skin imports are outside this release.
 
 ## Reference research
 
