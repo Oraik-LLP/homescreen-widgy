@@ -64,6 +64,6 @@ try {
         if (!(Test-Path $InnoCompiler)) { throw 'Inno Setup compiler not found. Pass -InnoCompiler or run tools/bootstrap.ps1 -Inno.' }
         & $InnoCompiler installer/panes.iss
         if ($LASTEXITCODE) { throw 'Installer compilation failed' }
-        Compress-Archive -Path dist/panes.exe,dist/panes.ico,dist/panes.svg,dist/panes-icon.png,dist/README.md,dist/VALIDATION.md,dist/CHANGELOG.md,dist/THIRD-PARTY-NOTICES.txt,dist/json.LICENSE,dist/licenses -DestinationPath dist/panes-1.2.0-x64.zip -Force
+        Compress-Archive -Path dist/panes.exe,dist/panes.ico,dist/panes.svg,dist/panes-icon.png,dist/README.md,dist/VALIDATION.md,dist/CHANGELOG.md,dist/THIRD-PARTY-NOTICES.txt,dist/json.LICENSE,dist/licenses -DestinationPath dist/panes-1.2.1-x64.zip -Force
     }
 } finally { Pop-Location }

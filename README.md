@@ -10,11 +10,11 @@ require Rainmeter, .NET, WebView, or a browser process.
 
 ## Install and use
 
-[Download the Windows installer](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-Setup-1.2.0-x64.exe),
+[Download the Windows installer](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-Setup-1.2.1-x64.exe),
 [standalone EXE](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes.exe),
-or [portable ZIP](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-1.2.0-x64.zip).
+or [portable ZIP](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-1.2.1-x64.zip).
 
-Run `dist/panes-Setup-1.2.0-x64.exe`. Installation is per user and
+Run `dist/panes-Setup-1.2.1-x64.exe`. Installation is per user and
 does not require administrator rights. Launch at sign-in and a desktop
 shortcut are optional and off by default. The ZIP can also run directly.
 
@@ -32,11 +32,13 @@ show/hide, or exit the widgets. Unlock to drag widgets. Lock again to make
 them click-through so desktop icons and selection work normally.
 
 Widgets sit above the wallpaper and behind normal applications. There is
-no always-on-top mode. The Windows wallpaper is not changed. Minimal and Compact retain the quiet clock styles. Editorial, Stacked, and Soft
-add expressive static typography and coordinated colors inspired by Flux-style
-personalization. Panes uses original layouts, with privately bundled Inter,
-Manrope, and DM Sans fonts. Theme changes retain positions, sizes, opacity,
-and widget visibility. No wallpaper or third-party theme artwork is included.
+no always-on-top mode. The Windows wallpaper is not changed. Minimal and Compact
+retain the quiet clock styles. Editorial and Stacked add expressive typography;
+Soft pairs warm cream and amber with subtle frosted panels inspired by Tagme.
+Panes uses original layouts and privately bundles Inter, Manrope, DM Sans, Space
+Grotesk, Plus Jakarta Sans, Outfit, and Google Sans Flex. Theme changes retain
+positions, sizes, opacity, and widget visibility. No wallpaper or theme artwork
+is included.
 
 Settings live in `%LOCALAPPDATA%/panes/settings.json`. Positions
 are stored in monitor-relative DIPs. If a monitor disappears, its widgets
@@ -45,6 +47,13 @@ automatically with the original saved as settings.json.v1.bak.
 Invalid or future-version settings are preserved and defaults run without
 overwriting them. **Reset layout** makes a backup before recovering such a file.
 Uninstall removes the app and its sign-in entry, and keeps your settings.
+
+## New in 1.2.1
+
+- Refined Soft with Tagme’s butter-yellow, cream, and amber palette, warm dark
+  text, and a fine highlight around light translucent panels.
+- Existing Soft-theme settings receive the updated theme colors automatically;
+  manually assigned widget colors remain in place.
 
 ## New in 1.2
 

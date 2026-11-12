@@ -1,3 +1,15 @@
+# Panes 1.2.1 validation — 2026-11-12
+
+## Build and release checks
+
+- Native 1.2.1 executable compiled with the updated Soft palette and renderer.
+- Existing settings with the original Soft palette update on load; manually
+  assigned widget colors are preserved.
+- Installer and portable ZIP carry the updated release notes and metadata.
+- The updated website build includes the Soft theme copy and release summary.
+- Interactive appearance across varied wallpaper, display scaling, and
+  wallpaper-match modes remains for hands-on review.
+
 # Panes 1.2 validation — 2026-11-12
 
 ## Build and release checks

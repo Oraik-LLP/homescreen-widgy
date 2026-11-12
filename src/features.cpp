@@ -8,7 +8,7 @@ const std::array<Theme, ThemeCount> Themes{{
     {L"Compact",L"Inter",0xF2F4F1,0x91B89D},
     {L"Editorial",L"DM Sans Semibold",0xFFF5E5,0xD9927B},
     {L"Stacked",L"Manrope Light",0xFFFFFF,0xA9D9EE},
-    {L"Soft",L"Inter Light",0xFFF6EA,0xC6B5EA}
+    {L"Soft",L"Inter Light",0x4C3E27,0x886411}
 }};
 void applyTheme(Config& c,int theme) {
     c.preset=std::clamp(theme,0,ThemeCount-1);const auto& t=Themes[c.preset];

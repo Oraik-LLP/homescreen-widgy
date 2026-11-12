@@ -136,6 +136,10 @@ LoadResult loadConfig(const std::filesystem::path& path) {
                 if (parseColor(stringValue(entry, "accent", L"", 7), color)) w.accent = color;
             }
         }
+        // Refresh the original Soft palette for existing settings without
+        // overwriting colors that the user assigned manually.
+        if(c.preset==4)for(auto& w:c.widgets)
+            if(!w.customColors&&w.color==0xFFF6EA&&w.accent==0xC6B5EA){w.color=0x4C3E27;w.accent=0x886411;}
     } catch (const std::exception& e) {
         result.value = Config{};
         result.warning = L"Settings could not be loaded. Defaults are active. Original file preserved.\n" + wide(e.what());

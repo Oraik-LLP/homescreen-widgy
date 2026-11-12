@@ -100,10 +100,20 @@ void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SY
     const auto base = logicalSize(w.kind, c.preset,100,c.seconds);
     const float width = static_cast<float>(base.cx), height = static_cast<float>(base.cy);
     if (editing || c.preset==4 || w.backing) {
-        setColor(0x15231D, editing ? .72f : w.backing ? .84f : .65f);
-        target->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(1,1,width-1,height-1),12,12), brush);
-        setColor(w.accent,.8f);
-        target->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(1,1,width-1,height-1),12,12),brush,1);
+        const auto panel=D2D1::RoundedRect(D2D1::RectF(1,1,width-1,height-1),12,12);
+        if(c.preset==4){
+            setColor(0xFFF6CE,(editing||w.backing)?0.86f:0.72f);
+            target->FillRoundedRectangle(panel,brush);
+            setColor(0xFFFFFF,.78f);
+            target->DrawRoundedRectangle(panel,brush,1);
+            setColor(0xFFFFFF,.62f);
+            target->DrawLine(D2D1::Point2F(15,2),D2D1::Point2F(width-15,2),brush,1);
+        }else{
+            setColor(0x15231D,editing ? .72f : w.backing ? .84f : .65f);
+            target->FillRoundedRectangle(panel,brush);
+            setColor(w.accent,.8f);
+            target->DrawRoundedRectangle(panel,brush,1);
+        }
     }
     if (w.kind == Kind::Clock) {
         if(c.preset==3){

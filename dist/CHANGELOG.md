@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1 — 2026-11-12
+
+- Refined Soft with Tagme’s butter-yellow, cream, and amber palette, minimal
+  frosted panels, dark warm text, and thin highlights.
+- Updated existing Soft-theme color values while preserving manual widget colors.
+- Updated the website theme description and release changelog.
+
 ## 1.2.0 — 2026-11-12
 
 - Added **Add Widget…**, a preview gallery for all seven widget types. Selecting

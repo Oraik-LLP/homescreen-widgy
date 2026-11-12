@@ -1,4 +1,4 @@
-#define AppVersion "1.2.0"
+#define AppVersion "1.2.1"
 [Setup]
 AppId={{256D9795-5629-48D9-881D-E0BB70DB1F93}
 AppName=panes

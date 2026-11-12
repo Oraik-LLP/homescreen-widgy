@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(panes VERSION 1.2.0 LANGUAGES CXX RC)
+project(panes VERSION 1.2.1 LANGUAGES CXX RC)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(panes WIN32 src/app.cpp src/config.cpp src/features.cpp src/wallpaper.cpp src/render.cpp assets/app.rc)

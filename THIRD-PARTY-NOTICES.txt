@@ -1,4 +1,4 @@
-panes 1.2.0
+panes 1.2.1
 
 nlohmann/json v3.12.0 — MIT License. Full license: json.LICENSE.
 Source: https://github.com/nlohmann/json/tree/v3.12.0
