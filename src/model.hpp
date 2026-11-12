@@ -10,7 +10,7 @@
 namespace dw {
 inline constexpr wchar_t AppName[] = L"panes";
 inline constexpr int ConfigVersion = 2;
-inline constexpr int WidgetCount = 8, ThemeCount = 5;
+inline constexpr int WidgetCount = 8, ThemeCount = 6;
 inline constexpr std::array<const wchar_t*, 7> BundledFontFamilies{{
     L"Inter", L"Manrope", L"DM Sans", L"Space Grotesk", L"Plus Jakarta Sans", L"Outfit", L"Google Sans Flex"
 }};
@@ -33,7 +33,7 @@ struct FocusState {
 };
 struct Config {
     bool shown = true, locked = true, seconds = false, hour24 = true;
-    int preset = 0; // Stable theme IDs: Minimal, Compact, Editorial, Stacked, Soft.
+    int preset = 0; // Stable theme IDs: Minimal, Compact, Editorial, Stacked, Soft, Glass.
     std::array<bool, ThemeCount> wallpaperMatch{};
     std::array<WidgetConfig, WidgetCount> widgets;
     FocusState focus;

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0 — 2026-11-13
+
+- Added Glass as a sixth theme, using Tagme's clear glass treatment as the visual
+  reference: lighter frost, richer wallpaper color, a cream tint, and fine rim
+  highlights. Soft keeps its denser frosted appearance.
+- Glass works across all eight widgets, with independent wallpaper matching and
+  retained placement, visibility, size, and opacity. Existing theme IDs stay intact.
+- Added an opaque Windows high-contrast fallback for both glass materials.
+- Simplified the website with flat surfaces, readable typography, real screenshots,
+  and System, Light, and Dark appearance controls on the home and guide pages.
+
 ## 1.3.2 — 2026-11-12
 
 - Fixed dragged positions reverting when another Settings action reapplied an

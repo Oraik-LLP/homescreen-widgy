@@ -89,7 +89,7 @@ void App::makeSettingsControls(){
     add(1,L"BUTTON",L"Accent color",AccentSwatch,538,590,40,30,BS_OWNERDRAW|WS_TABSTOP);
     add(1,L"BUTTON",L"Pick…",PickAccent,588,590,64,30,WS_TABSTOP);
     label(1,L"Theme palette — select a swatch to open Color tools",12,650);
-    for(int i=0;i<10;++i)add(1,L"BUTTON",L"Theme color",PaletteFirst+i,12+i*64,680,52,32,BS_OWNERDRAW|WS_TABSTOP);
+    for(int i=0;i<ThemeCount*2;++i)add(1,L"BUTTON",L"Theme color",PaletteFirst+i,12+i*54,680,44,32,BS_OWNERDRAW|WS_TABSTOP);
     add(1,L"BUTTON",L"Use theme colors",UseTheme,12,740,630,32,WS_TABSTOP);
 
     label(2,L"COLOR TOOLS",12,8);label(2,L"Pick, save, and copy colors. Assign them to the selected widget when ready.",12,40);
@@ -287,7 +287,7 @@ LRESULT CALLBACK App::SettingsProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
         }
         else if(id>=RecentFirst&&id<RecentFirst+12){size_t index=id-RecentFirst;if(index<a->config.recent.size())a->colorTool(a->config.recent[index]);}
         else if(id>=FavoriteFirst&&id<FavoriteFirst+8){size_t index=id-FavoriteFirst;if(index<a->config.favorites.size())a->colorTool(a->config.favorites[index]);}
-        else if(id>=PaletteFirst&&id<PaletteFirst+10){int index=id-PaletteFirst;auto& theme=Themes[index/2];a->colorTool(index%2?theme.accent:theme.text);a->page=2;a->scroll=0;a->layoutSettings();}
+        else if(id>=PaletteFirst&&id<PaletteFirst+ThemeCount*2){int index=id-PaletteFirst;auto& theme=Themes[index/2];a->colorTool(index%2?theme.accent:theme.text);a->page=2;a->scroll=0;a->layoutSettings();}
         else if(id==Reset){
             std::error_code error;auto path=a->root/L"settings.json";
             if(std::filesystem::exists(path)){std::filesystem::copy_file(path,a->root/(L"settings.before-reset-"+std::to_wstring(GetTickCount64())+L".json"),error);if(error){SetWindowTextW(a->child(Status),L"Could not back up settings. Defaults were not applied.");return 0;}}
@@ -309,7 +309,7 @@ LRESULT CALLBACK App::SettingsProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
         else {
             bool valid=true;
             if(id==TextSwatch||id==AccentSwatch)valid=parseColor(controlText(a->child(id==TextSwatch?Color:Accent)),color);
-            else if(id>=PaletteFirst&&id<PaletteFirst+10){int i=id-PaletteFirst;color=i%2?Themes[i/2].accent:Themes[i/2].text;}
+            else if(id>=PaletteFirst&&id<PaletteFirst+ThemeCount*2){int i=id-PaletteFirst;color=i%2?Themes[i/2].accent:Themes[i/2].text;}
             else if(id>=RecentFirst&&id<RecentFirst+12){size_t i=id-RecentFirst;valid=i<a->config.recent.size();if(valid)color=a->config.recent[i];}
             else if(id>=FavoriteFirst&&id<FavoriteFirst+8){size_t i=id-FavoriteFirst;valid=i<a->config.favorites.size();if(valid)color=a->config.favorites[i];}
             if(!valid)color=0xE8EBE8;auto brush=CreateSolidBrush(RGB(color>>16&255,color>>8&255,color&255));FillRect(item->hDC,&r,brush);DeleteObject(brush);FrameRect(item->hDC,&r,static_cast<HBRUSH>(GetStockObject(GRAY_BRUSH)));

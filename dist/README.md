@@ -10,11 +10,11 @@ require Rainmeter, .NET, WebView, or a browser process.
 
 ## Install and use
 
-[Download the Windows installer](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-Setup-1.3.2-x64.exe),
+[Download the Windows installer](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-Setup-1.4.0-x64.exe),
 [standalone EXE](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes.exe),
-or [portable ZIP](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-1.3.2-x64.zip).
+or [portable ZIP](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-1.4.0-x64.zip).
 
-Run `dist/panes-Setup-1.3.2-x64.exe`. Installation is per user and
+Run `dist/panes-Setup-1.4.0-x64.exe`. Installation is per user and
 does not require administrator rights. Launch at sign-in and a desktop
 shortcut are optional and off by default. The ZIP can also run directly.
 
@@ -41,6 +41,8 @@ Widgets sit above the wallpaper and behind normal applications. There is
 no always-on-top mode. The Windows wallpaper is not changed. Minimal and Compact
 retain the quiet clock styles. Editorial and Stacked add expressive typography;
 Soft pairs warm cream and amber with subtle frosted panels inspired by Tagme.
+Glass adds a clearer Tagme-inspired material with richer wallpaper color and a
+fine reflective rim. Both use cached wallpaper rather than capturing the screen.
 Panes uses original layouts and privately bundles Inter, Manrope, DM Sans, Space
 Grotesk, Plus Jakarta Sans, Outfit, and Google Sans Flex. Theme changes retain
 positions, sizes, opacity, and widget visibility. No wallpaper or theme artwork
@@ -53,6 +55,16 @@ automatically with the original saved as settings.json.v1.bak.
 Invalid or future-version settings are preserved and defaults run without
 overwriting them. **Reset to defaults** makes a backup before recovering such a file.
 Uninstall removes the app and its sign-in entry, and keeps your settings.
+
+## New in 1.4.0
+
+- Select **Appearance → Glass** for Tagme-inspired clear glass with a cream tint,
+  brighter rim, and a more colorful wallpaper backdrop. Soft retains denser frost.
+- All eight widgets share the material. Cached Windows wallpaper thumbnails keep
+  rendering local and stable while widgets are unfocused. This is a native Panes
+  rendering treatment rather than an embedded web effect or WPF backdrop.
+- Windows high contrast uses opaque system colors for readable glass widgets.
+- The website now offers System, Light, and Dark modes, including the guide pages.
 
 ## New in 1.3.2
 

@@ -88,7 +88,13 @@ void Surface::text(const std::wstring& value, const std::wstring& family, float 
     setColor(color);
     target->DrawText(value.c_str(), static_cast<UINT32>(value.size()), it->second, box, brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
-void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SYSTEMTIME& now, bool editing, bool present, UINT forcedDpi, const MediaSnapshot* media, const GlassTile* glass) {
+void Surface::draw(HWND window, const WidgetConfig& requested, const Config& c, const SYSTEMTIME& now, bool editing, bool present, UINT forcedDpi, const MediaSnapshot* media, const GlassTile* glass) {
+    WidgetConfig w=requested;const bool material=c.preset==4||c.preset==5;
+    HIGHCONTRASTW contrast{sizeof(HIGHCONTRASTW),0,nullptr};
+    const bool highContrast=material&&SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(contrast),&contrast,0)&&(contrast.dwFlags&HCF_HIGHCONTRASTON);
+    auto systemColor=[](int id){auto color=GetSysColor(id);return static_cast<unsigned>(GetRValue(color)<<16|GetGValue(color)<<8|GetBValue(color));};
+    if(highContrast){w.color=systemColor(COLOR_WINDOWTEXT);w.accent=systemColor(COLOR_WINDOWTEXT);}
+    if(c.preset==5&&!highContrast&&!w.customColors&&w.accent==Themes[5].accent&&((w.color>>16&255)*299+(w.color>>8&255)*587+(w.color&255)*114)>160000)w.accent=0xF6D96B;
     const UINT dpi = forcedDpi ? forcedDpi : GetDpiForWindow(window);
     auto logical = logicalSize(w.kind, c.preset, w.scale, c.seconds);
     SIZE size{MulDiv(logical.cx, dpi,96), MulDiv(logical.cy,dpi,96)};
@@ -99,10 +105,10 @@ void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SY
     target->SetTransform(D2D1::Matrix3x2F::Scale(factor, factor));
     const auto base = logicalSize(w.kind, c.preset,100,c.seconds);
     const float width = static_cast<float>(base.cx), height = static_cast<float>(base.cy);
-    if (editing || c.preset==4 || w.backing || w.kind==Kind::Music) {
-        const auto panel=D2D1::RoundedRect(D2D1::RectF(1,1,width-1,height-1),12,12);
-        if(c.preset==4){
-            if(glass&&glass->width&&glass->height&&glass->pixels.size()==static_cast<size_t>(glass->width)*glass->height){
+    if (editing || material || w.backing || w.kind==Kind::Music) {
+        const auto panel=D2D1::RoundedRect(D2D1::RectF(1,1,width-1,height-1),c.preset==5?16.f:12.f,c.preset==5?16.f:12.f);
+        if(material){
+            if(!highContrast&&glass&&glass->width&&glass->height&&glass->pixels.size()==static_cast<size_t>(glass->width)*glass->height){
                 ID2D1Bitmap* backdrop{};ID2D1RoundedRectangleGeometry* clip{};
                 auto properties=D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_PREMULTIPLIED));
                 if(SUCCEEDED(target->CreateBitmap(D2D1::SizeU(glass->width,glass->height),glass->pixels.data(),glass->width*4,properties,&backdrop))&&SUCCEEDED(graphics.d2d->CreateRoundedRectangleGeometry(panel,&clip))){
@@ -110,9 +116,18 @@ void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SY
                 }release(clip);release(backdrop);
             }
             const bool lightText=((w.color>>16&255)*299+(w.color>>8&255)*587+(w.color&255)*114)>160000;
-            setColor(lightText?0x182029:0xFFF9E9,w.backing?.9f:.74f);
+            // Tagme uses a clearer white/cream material with a bright rim; Soft
+            // retains the denser frost. Both use cached wallpaper, never screen capture.
+            setColor(highContrast?systemColor(COLOR_WINDOW):lightText?0x182029:c.preset==5?0xFFFDF5:0xFFF9E9,highContrast?1.f:w.backing?.9f:c.preset==5?.60f:.74f);
             target->FillRoundedRectangle(panel,brush);
-            setColor(0xFFFFFF,lightText?.22f:.58f);
+            if(c.preset==5&&!highContrast){
+                D2D1_GRADIENT_STOP stops[]{{0,D2D1::ColorF(1,1,1,lightText?.08f:.26f)},{.5f,D2D1::ColorF(1,.99f,.96f,.025f)},{1,D2D1::ColorF(1,.94f,.71f,lightText?.035f:.12f)}};
+                ID2D1GradientStopCollection* collection{};ID2D1LinearGradientBrush* sheen{};
+                if(SUCCEEDED(target->CreateGradientStopCollection(stops,3,&collection))&&SUCCEEDED(target->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0,0),D2D1::Point2F(width,height)),collection,&sheen)))target->FillRoundedRectangle(panel,sheen);
+                release(sheen);release(collection);
+                setColor(0xFFFFFF,lightText?.12f:.24f);target->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(3,3,width-3,height-3),14,14),brush,1);
+            }
+            setColor(highContrast?w.color:0xFFFFFF,highContrast?1.f:lightText?.22f:c.preset==5?.85f:.58f);
             target->DrawRoundedRectangle(panel,brush,1);
             setColor(0xFFFFFF,lightText?.28f:.65f);
             target->DrawLine(D2D1::Point2F(15,2),D2D1::Point2F(width-15,2),brush,1);

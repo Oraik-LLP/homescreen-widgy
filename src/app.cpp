@@ -40,12 +40,12 @@ static App* currentApp{};
 struct Widget {
     App* app{}; int index{}; HWND window{}; std::unique_ptr<Surface> surface;
     SYSTEMTIME last{}; bool dirty=true, dragging=false; POINT mouse{}, origin{};
-    GlassTile glass;RECT glassBounds{};unsigned glassRevision=0;
+    GlassTile glass;RECT glassBounds{};unsigned glassRevision=0;int glassTheme=-1;
 };
 enum ControlId { SelectWidget=201, Preset, Font, Scale, Opacity, Color, Accent, Visible, Hour24, Seconds, Startup, Apply, Reset, Done, Status, TabWidgets, TabAppearance, TabColors, MatchWallpaper, UseTheme, PickText, PickAccent, TextSwatch, AccentSwatch,
     FocusMinutes, BreakMinutes, FocusStart, FocusReset, FocusNext, EventTitle, EventDate, Zone, City,
     ToolHex, ToolChoose, ToolPick, CopyHex, CopyRgb, Favorite, AssignText, AssignAccent,
-    ThemeFirst=400, RecentFirst=500, FavoriteFirst=520, PaletteFirst=540, AddWidget=550, BackWidgets=551, EditMode=552, WidgetFirst=600 };
+    ThemeFirst=400, RecentFirst=500, FavoriteFirst=520, PaletteFirst=700, AddWidget=550, BackWidgets=551, EditMode=552, WidgetFirst=600 };
 class App {
 public:
     HINSTANCE instance{}; HWND control{},settings{},desktopHost{}; UINT taskbarCreated{};
@@ -230,7 +230,7 @@ WidgetConfig App::effectiveWidget(const Widget& widget) const {
 void App::requestWallpaper(){
     KillTimer(control,WallpaperTimer);
     if(paused)return;
-    if(!config.wallpaperMatch[config.preset]&&config.preset!=4){wallpaper.cancel();++wallpaperRevision;if(wallpaper.busy())SetTimer(control,WallpaperPoll,100,nullptr);return;}
+    if(!config.wallpaperMatch[config.preset]&&config.preset!=4&&config.preset!=5){wallpaper.cancel();++wallpaperRevision;if(wallpaper.busy())SetTimer(control,WallpaperPoll,100,nullptr);return;}
     wallpaper.request(monitors);SetTimer(control,WallpaperPoll,100,nullptr);SetTimer(control,WallpaperTimer,60000,nullptr);
 }
 void App::completeFocus(){
@@ -256,7 +256,7 @@ void App::render(bool force) {
         bool changed=cfg.kind==Kind::Music?false:cfg.kind==Kind::Date||cfg.kind==Kind::Calendar?dateChanged:
             cfg.kind==Kind::Clock?(config.seconds?secondChanged:minuteChanged):
             cfg.kind==Kind::Focus?(config.focus.running&&secondChanged):minuteChanged;
-        if(force||w.dirty||changed){auto effective=effectiveWidget(w);w.surface->draw(w.window,effective,config,now,!config.locked,true,0,cfg.kind==Kind::Music?&mediaState:nullptr,config.preset==4?glassFor(w):nullptr);w.last=now;w.dirty=false;}
+        if(force||w.dirty||changed){auto effective=effectiveWidget(w);w.surface->draw(w.window,effective,config,now,!config.locked,true,0,cfg.kind==Kind::Music?&mediaState:nullptr,(config.preset==4||config.preset==5)?glassFor(w):nullptr);w.last=now;w.dirty=false;}
     }
 }
 void App::schedule() {
@@ -275,7 +275,7 @@ const GlassTile* App::glassFor(Widget& w){
     RECT rect{};GetWindowRect(w.window,&rect);POINT center{(rect.left+rect.right)/2,(rect.top+rect.bottom)/2};
     auto image=std::find_if(wallpaper.result.images.begin(),wallpaper.result.images.end(),[&](const auto& item){return PtInRect(&item.bounds,center)&&item.valid;});
     if(image==wallpaper.result.images.end())return nullptr;
-    if(w.glassRevision!=wallpaperRevision||!EqualRect(&rect,&w.glassBounds)){w.glass=frostedWallpaper(rect,*image);w.glassBounds=rect;w.glassRevision=wallpaperRevision;}
+    if(w.glassRevision!=wallpaperRevision||w.glassTheme!=config.preset||!EqualRect(&rect,&w.glassBounds)){w.glass=frostedWallpaper(rect,*image,config.preset==5);w.glassBounds=rect;w.glassRevision=wallpaperRevision;w.glassTheme=config.preset;}
     return &w.glass;
 }
 void App::addTray() {
@@ -496,6 +496,9 @@ void App::runChecks() {
         }
         expect(GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS)<=handles+4,"Repeated editing does not leak GDI handles");
         expect(config.seconds && config.preset==1,"Compact preset and seconds are configurable");
+        auto positioned=config.widgets[0];SendMessageW(settings,WM_COMMAND,MAKEWPARAM(ThemeFirst+5,BN_CLICKED),reinterpret_cast<LPARAM>(child(ThemeFirst+5)));
+        expect(applySettings()&&config.preset==5&&config.widgets[0].x==positioned.x&&config.widgets[0].y==positioned.y,"Glass gallery selection preserves the current layout");
+        expect(child(PaletteFirst+10)&&child(PaletteFirst+11)&&child(PaletteFirst+10)!=child(AddWidget),"Glass palette swatches have distinct control IDs");
         for(int i=0;i<3;++i)widgets[i].surface->saveBmp(root/(L"compact-"+std::to_wstring(i)+L".bmp"));
         SendMessageW(control,WM_TIMECHANGE,0,0);expect(widgets[0].last.wYear>2020,"System time change refreshes display");
         SendMessageW(settings,WM_COMMAND,MAKEWPARAM(Reset,BN_CLICKED),reinterpret_cast<LPARAM>(child(Reset)));

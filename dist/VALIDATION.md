@@ -1,3 +1,17 @@
+# Panes 1.4.0 validation — 2026-11-13
+
+- 61 core checks passed, including the appended Glass theme ID, settings round
+  trips, layout preservation, and distinct bounded Glass and Soft backdrops.
+- 168 theme/widget/DPI previews rendered, plus both materials with light text.
+  Glass light and dark material previews were visually inspected.
+- All 48 isolated application checks passed, including the sixth theme's gallery
+  selection and distinct palette control IDs.
+- All 12 website checks passed, covering saved appearance, OS changes, blocked
+  storage, cross-tab updates, shared guide-page controls, color contrast, static
+  screenshots, and changelog behavior. The static site builds successfully.
+- Interactive browser preview was unavailable in this session; browser layout
+  and platform-native form-control appearance remain for hands-on review.
+
 # Panes 1.3.2 validation — 2026-11-12
 
 - 58 core checks passed, including grid snapping on negative-coordinate displays,

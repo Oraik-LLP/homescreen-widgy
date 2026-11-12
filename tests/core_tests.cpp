@@ -56,6 +56,9 @@ int wmain(int argc,wchar_t** argv) {
         require(loaded.value.focus.deadline==expanded.focus.deadline&&loaded.value.focus.running&&loaded.value.recent==expanded.recent&&loaded.value.favorites==expanded.favorites,"Timer deadline and palettes persist");
         expanded.widgets[0].x=123;expanded.widgets[0].scale=135;expanded.widgets[0].opacity=71;expanded.widgets[0].customColors=true;
         applyTheme(expanded,2);require(expanded.widgets[0].x==123&&expanded.widgets[0].scale==135&&expanded.widgets[0].opacity==71&&!expanded.widgets[0].customColors,"Theme changes retain placement, size and opacity");
+        applyTheme(expanded,5);expanded.wallpaperMatch[5]=true;saveConfig(path,expanded);loaded=loadConfig(path);
+        require(loaded.value.preset==5&&loaded.value.wallpaperMatch[5]&&loaded.value.widgets[0].x==123&&loaded.value.widgets[0].scale==135&&loaded.value.widgets[0].opacity==71,"Glass uses appended theme ID 5 and retains layout through a settings round trip");
+        require(loaded.value.widgets[0].font==Themes[5].font&&std::wstring(Themes[4].name)==L"Soft","Glass typography applies while the existing Soft theme retains its ID");
         auto backupPath=std::filesystem::path(path.wstring()+L".v1.bak");std::string priorBackup;
         if(std::filesystem::exists(backupPath)){std::ifstream prior(backupPath);priorBackup.assign(std::istreambuf_iterator<char>(prior),{});}
         {std::ofstream f(path);f<<R"({"version":1,"preset":1,"widgets":[{"id":0,"x":37,"font":"Consolas","color":"#123456"}]})";}
@@ -90,6 +93,7 @@ int wmain(int argc,wchar_t** argv) {
         image.background=0xFFFFFF;matched=matchWallpaper(Config{}.widgets[0],{100,100,400,250},image);require(matched.color==0x202520,"Light wallpaper chooses dark text");
         image.width=8;image.height=8;image.originalWidth=1000;image.originalHeight=800;for(int i=0;i<64;++i)image.pixels.push_back(i%2?0:0xFFFFFF);
         matched=matchWallpaper(Config{}.widgets[0],{0,0,1000,800},image);require(matched.backing,"Busy wallpaper adds a contrast backing");
+        auto clear=frostedWallpaper({0,0,1000,800},image,true);require(clear.width==64&&clear.height==48&&clear.pixels!=frostedWallpaper({0,0,1000,800},image).pixels,"Clear Glass and Soft frost generate distinct bounded backdrops");
         auto manual=Config{}.widgets[0];manual.customColors=true;manual.color=0x123456;require(matchWallpaper(manual,{0,0,1000,800},image).color==0x123456,"Manual colors override wallpaper matching");
         image.valid=false;manual.customColors=false;require(matchWallpaper(manual,{0,0,1000,800},image).color==0x123456,"Unreadable wallpaper retains theme colors");
         require(frostedWallpaper({0,0,1000,800},image).pixels.empty(),"Missing wallpaper uses translucent glass fallback");

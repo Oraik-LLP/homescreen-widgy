@@ -45,13 +45,15 @@ WidgetConfig matchWallpaper(const WidgetConfig& w,RECT rect,const WallpaperImage
     }
     return matched;
 }
-GlassTile frostedWallpaper(RECT rect,const WallpaperImage& image){
+GlassTile frostedWallpaper(RECT rect,const WallpaperImage& image,bool clearGlass){
     GlassTile tile;if(!image.valid)return tile;
     tile.width=64;tile.height=48;tile.pixels.resize(tile.width*tile.height);
     for(UINT y=0;y<tile.height;++y)for(UINT x=0;x<tile.width;++x){
         double sx=rect.left+(x+.5)*(rect.right-rect.left)/tile.width,sy=rect.top+(y+.5)*(rect.bottom-rect.top)/tile.height;
         unsigned r=0,g=0,b=0;
-        for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx){unsigned c=sample(image,sx+dx*18,sy+dy*18);r+=c>>16&255;g+=c>>8&255;b+=c&255;}
+        const int radius=clearGlass?8:18;
+        for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx){unsigned c=sample(image,sx+dx*radius,sy+dy*radius);r+=c>>16&255;g+=c>>8&255;b+=c&255;}
+        if(clearGlass){double gray=(r+g+b)/3.;auto vivid=[&](unsigned channel){return static_cast<unsigned>(std::clamp(gray+(channel-gray)*1.35,0.,2295.));};r=vivid(r);g=vivid(g);b=vivid(b);}
         tile.pixels[y*tile.width+x]=0xff000000|(r/9<<16)|(g/9<<8)|b/9;
     }
     return tile;
