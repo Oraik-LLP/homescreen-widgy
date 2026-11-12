@@ -1,5 +1,6 @@
 #pragma once
 #include "model.hpp"
+#include "media.hpp"
 #include <d2d1.h>
 #include <dwrite_3.h>
 #include <map>
@@ -36,7 +37,7 @@ public:
     ~Surface();
     Surface(const Surface&) = delete;
     void clearFormats();
-    void draw(HWND window, const WidgetConfig& widget, const Config& config, const SYSTEMTIME& now, bool editing, bool present = true, UINT forcedDpi = 0);
+    void draw(HWND window, const WidgetConfig& widget, const Config& config, const SYSTEMTIME& now, bool editing, bool present = true, UINT forcedDpi = 0, const MediaSnapshot* media = nullptr);
     void preview(HDC destination, RECT box) const;
     void saveBmp(const std::filesystem::path& path) const;
     SIZE size() const { return pixels; }

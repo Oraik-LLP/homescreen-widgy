@@ -16,6 +16,7 @@
 
 namespace dw {
 constexpr UINT TrayMessage=WM_APP+1, RepairMessage=WM_APP+2, ActivateMessage=WM_APP+3, PaletteMessage=WM_APP+4;
+constexpr UINT MediaMessage=WM_APP+6;
 constexpr UINT_PTR TickTimer=1, RetryTimer=2, DiagnosticTimer=3, WallpaperTimer=4, WallpaperPoll=5;
 constexpr int MenuSettings=101, MenuLock=102, MenuShow=103, MenuExit=104, MenuPalette=105, MenuFocus=106, MenuFocusReset=107, MenuFocusNext=108;
 constexpr wchar_t WidgetClass[]=L"panes.Widget.v1", ControlClass[]=L"panes.Controller.v1", SettingsClass[]=L"panes.Settings.v1";
@@ -40,7 +41,7 @@ public:
     std::filesystem::path root; std::wstring controllerTitle=L"panes controller",warning,status=L"Desktop mode · offline";
     Config config; std::unique_ptr<Graphics> graphics;
     std::array<Widget,WidgetCount> widgets;
-    Config draft; WallpaperMatcher wallpaper;
+    Config draft; WallpaperMatcher wallpaper;MediaController media;MediaSnapshot mediaState;
     HWND panel{},picker{};int page=0,scroll=0,bodyHeight=0;
     struct UiItem {HWND window;int page,y;int kind;};std::vector<UiItem> uiItems;
     std::array<std::unique_ptr<Surface>,ThemeCount> themePreviews;
@@ -58,7 +59,7 @@ public:
     void addTray(); void trayMenu(); void command(int id); void remember(Widget& w);
     void showSettings(); void makeSettingsControls(); void populateSettings(); bool applySettings();
     bool readSettings(Config& candidate);void layoutSettings();void refreshPreviews();void refreshWidgetPreviews();void colorTool(unsigned color,bool remember=true);void chooseColor(int id);void startPicker();void endPicker(bool accept);
-    void focusCommand(int action);void completeFocus();void requestWallpaper();WidgetConfig effectiveWidget(const Widget& w) const;
+    void focusCommand(int action);void completeFocus();void requestWallpaper();void updateMedia();WidgetConfig effectiveWidget(const Widget& w) const;
     HWND child(int id) const {HWND w=panel?GetDlgItem(panel,id):nullptr;return w?w:GetDlgItem(settings,id);}
     void sample(); void finishDiagnostics(); bool startupEnabled() const; bool setStartup(bool on);
     void runChecks();
@@ -97,6 +98,7 @@ static void CALLBACK eventProc(HWINEVENTHOOK,DWORD event,HWND hwnd,LONG object,L
 }
 App::~App() {
     currentApp=nullptr;
+    media.stop();
     if(picker)DestroyWindow(picker);
     for(auto hook:hooks) if(hook) UnhookWinEvent(hook);
     if(control) { WTSUnRegisterSessionNotification(control); Shell_NotifyIconW(NIM_DELETE,&tray); }
@@ -132,7 +134,8 @@ void App::place(Widget& widget,bool defaults) {
     POINT pos{monitor.work.left+MulDiv(cfg.x,monitor.dpi,96), monitor.work.top+MulDiv(cfg.y,monitor.dpi,96)};
     if(!cfg.positioned || defaults) {
         int width=monitor.work.right-monitor.work.left,height=monitor.work.bottom-monitor.work.top;
-        if(static_cast<int>(cfg.kind)>=3){int slot=static_cast<int>(cfg.kind)-3;pos={monitor.work.left+MulDiv(30+slot%2*350,monitor.dpi,96),monitor.work.bottom-MulDiv(350-slot/2*170,monitor.dpi,96)};}
+        if(cfg.kind==Kind::Music)pos={monitor.work.left+MulDiv(30,monitor.dpi,96),monitor.work.bottom-MulDiv(700,monitor.dpi,96)};
+        else if(static_cast<int>(cfg.kind)>=3){int slot=static_cast<int>(cfg.kind)-3;pos={monitor.work.left+MulDiv(30+slot%2*350,monitor.dpi,96),monitor.work.bottom-MulDiv(350-slot/2*170,monitor.dpi,96)};}
         else pos=cfg.kind==Kind::Calendar ? POINT{monitor.work.right-size.cx-40,monitor.work.top+height/3}
             : POINT{monitor.work.left+(width-size.cx)/2,monitor.work.top+height/9+(cfg.kind==Kind::Date?MulDiv(180,monitor.dpi,96):0)};
     }
@@ -221,16 +224,16 @@ void App::render(bool force) {
         bool dateChanged=now.wYear!=w.last.wYear || now.wMonth!=w.last.wMonth || now.wDay!=w.last.wDay;
         bool minuteChanged=dateChanged || now.wHour!=w.last.wHour || now.wMinute!=w.last.wMinute;
         bool secondChanged=minuteChanged||now.wSecond!=w.last.wSecond;
-        bool changed=cfg.kind==Kind::Date||cfg.kind==Kind::Calendar?dateChanged:
+        bool changed=cfg.kind==Kind::Music?false:cfg.kind==Kind::Date||cfg.kind==Kind::Calendar?dateChanged:
             cfg.kind==Kind::Clock?(config.seconds?secondChanged:minuteChanged):
             cfg.kind==Kind::Focus?(config.focus.running&&secondChanged):minuteChanged;
-        if(force||w.dirty||changed){auto effective=effectiveWidget(w);w.surface->draw(w.window,effective,config,now,!config.locked);w.last=now;w.dirty=false;}
+        if(force||w.dirty||changed){auto effective=effectiveWidget(w);w.surface->draw(w.window,effective,config,now,!config.locked,true,0,cfg.kind==Kind::Music?&mediaState:nullptr);w.last=now;w.dirty=false;}
     }
 }
 void App::schedule() {
     KillTimer(control,TickTimer);if(paused)return;
     SYSTEMTIME now{};GetLocalTime(&now);UINT interval=3600000;bool needed=false;
-    if(config.shown)for(const auto& w:config.widgets)if(w.visible){needed=true;
+    if(config.shown)for(const auto& w:config.widgets)if(w.visible){if(w.kind==Kind::Music)continue;needed=true;
         if(w.kind==Kind::Clock||w.kind==Kind::WorldClock||w.kind==Kind::Countdown||w.kind==Kind::Battery)interval=std::min(interval,nextTick(now,w.kind==Kind::Clock&&config.seconds));
         else if(w.kind==Kind::Focus&&config.focus.running)interval=std::min(interval,nextTick(now,true));
         else {UINT midnight=((23-now.wHour)*3600u+(59-now.wMinute)*60u+60-now.wSecond)*1000u-now.wMilliseconds;interval=std::min(interval,midnight);}
@@ -238,6 +241,7 @@ void App::schedule() {
     if(config.focus.running){needed=true;auto left=focusRemaining(config.focus,utcNow());interval=std::min(interval,static_cast<UINT>(std::min(3600000LL,std::max(1LL,left*1000))));}
     if(needed)SetTimer(control,TickTimer,std::max(1u,interval),nullptr);
 }
+void App::updateMedia(){media.setEnabled(!paused&&config.shown&&config.widgets[static_cast<int>(Kind::Music)].visible);}
 void App::addTray() {
     tray={};tray.cbSize=sizeof(tray);tray.hWnd=control;tray.uID=1;
     tray.uFlags=NIF_ICON|NIF_MESSAGE|NIF_TIP;tray.uCallbackMessage=TrayMessage;
@@ -263,7 +267,7 @@ void App::command(int id) {
     case MenuFocusReset:focusCommand(1);break;
     case MenuFocusNext:focusCommand(2);break;
     case MenuLock:config.locked=!config.locked;render(true);repair();save();break;
-    case MenuShow:config.shown=!config.shown;render(true);repair();schedule();save();break;
+    case MenuShow:config.shown=!config.shown;updateMedia();render(true);repair();schedule();save();break;
     case MenuExit:PostMessageW(control,WM_CLOSE,0,0);break;
     }
 }
@@ -287,7 +291,7 @@ void App::init() {
             WidgetClass,kindName(static_cast<Kind>(i)),WS_POPUP,0,0,10,10,nullptr,nullptr,instance,&w);
         if(!w.window) throw std::runtime_error("Cannot create widget");place(w);
     }
-    render(true);repair();addTray();completeFocus();schedule();requestWallpaper();
+    render(true);repair();addTray();completeFocus();schedule();requestWallpaper();media.start(control);updateMedia();
     hooks.push_back(SetWinEventHook(EVENT_SYSTEM_FOREGROUND,EVENT_SYSTEM_FOREGROUND,nullptr,eventProc,0,0,WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS));
     hooks.push_back(SetWinEventHook(EVENT_SYSTEM_MINIMIZESTART,EVENT_SYSTEM_MINIMIZEEND,nullptr,eventProc,0,0,WINEVENT_OUTOFCONTEXT));
     hooks.push_back(SetWinEventHook(EVENT_OBJECT_DESTROY,EVENT_OBJECT_DESTROY,nullptr,eventProc,0,0,WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS));
@@ -307,7 +311,14 @@ LRESULT CALLBACK App::WidgetProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
     case WM_PAINT:{PAINTSTRUCT paint{};BeginPaint(hwnd,&paint);EndPaint(hwnd,&paint);return 0;}
     case WM_MOUSEACTIVATE:return MA_NOACTIVATE;
     case WM_SYSCOMMAND:if((wp&0xfff0)==SC_MINIMIZE)return 0;break;
-    case WM_LBUTTONDOWN:if(!a.config.locked) {w->dragging=true;GetCursorPos(&w->mouse);RECT r{};GetWindowRect(hwnd,&r);w->origin={r.left,r.top};SetCapture(hwnd);}return 0;
+    case WM_LBUTTONDOWN:if(!a.config.locked) {
+        if(a.config.widgets[w->index].kind==Kind::Music){
+            const float factor=GetDpiForWindow(hwnd)/96.f*a.config.widgets[w->index].scale/100.f;
+            const float x=GET_X_LPARAM(lp)/factor,y=GET_Y_LPARAM(lp)/factor;
+            if(y>=115&&y<=172&&x>=135&&x<=325){a.media.command(x<195?MediaCommand::Previous:x<270?MediaCommand::Toggle:MediaCommand::Next);return 0;}
+        }
+        w->dragging=true;GetCursorPos(&w->mouse);RECT r{};GetWindowRect(hwnd,&r);w->origin={r.left,r.top};SetCapture(hwnd);
+    }return 0;
     case WM_MOUSEMOVE:if(w->dragging) {POINT p{};GetCursorPos(&p);SetWindowPos(hwnd,nullptr,w->origin.x+p.x-w->mouse.x,w->origin.y+p.y-w->mouse.y,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);}return 0;
     case WM_LBUTTONUP:if(w->dragging) {w->dragging=false;ReleaseCapture();a.remember(*w);}return 0;
     case WM_CAPTURECHANGED:if(w->dragging) {w->dragging=false;a.remember(*w);}return 0;
@@ -333,6 +344,7 @@ LRESULT CALLBACK App::ControlProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
         case ActivateMessage:a->showSettings();return 0;
         case PaletteMessage:a->showSettings();a->page=2;a->scroll=0;a->layoutSettings();return 0;
         case RepairMessage:a->repair();return 0;
+        case MediaMessage:a->mediaState=a->media.snapshot();a->widgets[static_cast<int>(Kind::Music)].dirty=true;a->render();return 0;
         case WM_TIMER:
             if(wp==TickTimer){KillTimer(hwnd,TickTimer);a->completeFocus();a->render();a->schedule();}
             else if(wp==RetryTimer){KillTimer(hwnd,RetryTimer);a->repair();}
@@ -344,12 +356,12 @@ LRESULT CALLBACK App::ControlProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             a->loadMonitors();for(auto& w:a->widgets)if(!w.dragging)a->place(w);a->render(true);a->repair();a->requestWallpaper();a->save();return 0;
         case WM_TIMECHANGE:a->completeFocus();a->render(true);a->schedule();return 0;
         case WM_WTSSESSION_CHANGE:
-            if(wp==WTS_SESSION_LOCK){a->paused=true;KillTimer(a->control,WallpaperTimer);a->schedule();a->repair();}
-            else if(wp==WTS_SESSION_UNLOCK){a->paused=false;a->completeFocus();a->requestWallpaper();a->render(true);a->repair();a->schedule();}return 0;
+            if(wp==WTS_SESSION_LOCK){a->paused=true;a->updateMedia();KillTimer(a->control,WallpaperTimer);a->schedule();a->repair();}
+            else if(wp==WTS_SESSION_UNLOCK){a->paused=false;a->updateMedia();a->completeFocus();a->requestWallpaper();a->render(true);a->repair();a->schedule();}return 0;
         case WM_POWERBROADCAST:
             if(wp==PBT_APMPOWERSTATUSCHANGE){a->widgets[5].dirty=true;a->render();}
-            if(wp==PBT_APMSUSPEND){a->paused=true;a->schedule();}
-            else if(wp==PBT_APMRESUMEAUTOMATIC || wp==PBT_APMRESUMESUSPEND){a->paused=false;a->completeFocus();a->requestWallpaper();a->render(true);a->repair();a->schedule();}return TRUE;
+            if(wp==PBT_APMSUSPEND){a->paused=true;a->updateMedia();a->schedule();}
+            else if(wp==PBT_APMRESUMEAUTOMATIC || wp==PBT_APMRESUMESUSPEND){a->paused=false;a->updateMedia();a->completeFocus();a->requestWallpaper();a->render(true);a->repair();a->schedule();}return TRUE;
         case WM_QUERYENDSESSION:a->save();return TRUE;
         case WM_CLOSE:a->quitting=true;a->save();if(a->diagnostics)a->finishDiagnostics();PostQuitMessage(0);return 0;
         }

@@ -4,17 +4,17 @@ Four panes, one quiet desktop. The original four-pane mark is available as
 `assets/panes.svg`, `assets/app.ico`, and `assets/panes-icon-1024.png`.
 
 A small native Windows 11 x64 app for a clock, date, month calendar, focus timer,
-event countdown, battery indicator, and world clock.
+event countdown, battery indicator, world clock, and Music widget.
 Built with C++20, Win32, Direct2D and DirectWrite. Works offline and does not
 require Rainmeter, .NET, WebView, or a browser process.
 
 ## Install and use
 
-[Download the Windows installer](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-Setup-1.2.1-x64.exe),
+[Download the Windows installer](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-Setup-1.3.0-x64.exe),
 [standalone EXE](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes.exe),
-or [portable ZIP](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-1.2.1-x64.zip).
+or [portable ZIP](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-1.3.0-x64.zip).
 
-Run `dist/panes-Setup-1.2.1-x64.exe`. Installation is per user and
+Run `dist/panes-Setup-1.3.0-x64.exe`. Installation is per user and
 does not require administrator rights. Launch at sign-in and a desktop
 shortcut are optional and off by default. The ZIP can also run directly.
 
@@ -30,6 +30,11 @@ Settings with X or Escape discards unapplied edits and leaves widgets running.
 Double-click the tray icon for Settings. Right-click it to unlock,
 show/hide, or exit the widgets. Unlock to drag widgets. Lock again to make
 them click-through so desktop icons and selection work normally.
+
+Choose **Add Widget… → Music** to show Windows Now Playing information from
+supported players and browsers. Unlock widgets from the tray to use previous,
+play/pause, and next; drag the card outside those controls to move it. Artwork and
+metadata stay local. Players decide what information and controls they expose.
 
 Widgets sit above the wallpaper and behind normal applications. There is
 no always-on-top mode. The Windows wallpaper is not changed. Minimal and Compact
@@ -47,6 +52,12 @@ automatically with the original saved as settings.json.v1.bak.
 Invalid or future-version settings are preserved and defaults run without
 overwriting them. **Reset layout** makes a backup before recovering such a file.
 Uninstall removes the app and its sign-in entry, and keeps your settings.
+
+## New in 1.3.0
+
+- Added the optional Music widget, using Windows global media sessions for track
+  details, artwork, playback state, and controls. It starts hidden.
+- Media work pauses when the widget is hidden or the Windows session is locked.
 
 ## New in 1.2.1
 

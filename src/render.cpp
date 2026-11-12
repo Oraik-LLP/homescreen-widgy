@@ -88,7 +88,7 @@ void Surface::text(const std::wstring& value, const std::wstring& family, float 
     setColor(color);
     target->DrawText(value.c_str(), static_cast<UINT32>(value.size()), it->second, box, brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
-void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SYSTEMTIME& now, bool editing, bool present, UINT forcedDpi) {
+void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SYSTEMTIME& now, bool editing, bool present, UINT forcedDpi, const MediaSnapshot* media) {
     const UINT dpi = forcedDpi ? forcedDpi : GetDpiForWindow(window);
     auto logical = logicalSize(w.kind, c.preset, w.scale, c.seconds);
     SIZE size{MulDiv(logical.cx, dpi,96), MulDiv(logical.cy,dpi,96)};
@@ -99,7 +99,7 @@ void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SY
     target->SetTransform(D2D1::Matrix3x2F::Scale(factor, factor));
     const auto base = logicalSize(w.kind, c.preset,100,c.seconds);
     const float width = static_cast<float>(base.cx), height = static_cast<float>(base.cy);
-    if (editing || c.preset==4 || w.backing) {
+    if (editing || c.preset==4 || w.backing || w.kind==Kind::Music) {
         const auto panel=D2D1::RoundedRect(D2D1::RectF(1,1,width-1,height-1),12,12);
         if(c.preset==4){
             setColor(0xFFF6CE,(editing||w.backing)?0.86f:0.72f);
@@ -108,6 +108,11 @@ void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SY
             target->DrawRoundedRectangle(panel,brush,1);
             setColor(0xFFFFFF,.62f);
             target->DrawLine(D2D1::Point2F(15,2),D2D1::Point2F(width-15,2),brush,1);
+        }else if(w.kind==Kind::Music){
+            setColor(0x18211D,editing?.55f:.13f);
+            target->FillRoundedRectangle(panel,brush);
+            setColor(w.accent,editing?.55f:.22f);
+            target->DrawRoundedRectangle(panel,brush,1);
         }else{
             setColor(0x15231D,editing ? .72f : w.backing ? .84f : .65f);
             target->FillRoundedRectangle(panel,brush);
@@ -115,7 +120,52 @@ void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SY
             target->DrawRoundedRectangle(panel,brush,1);
         }
     }
-    if (w.kind == Kind::Clock) {
+    if(w.kind==Kind::Music) {
+        MediaSnapshot empty;
+        const auto& state=media?*media:empty;
+        const bool hasTrack=state.hasSession&&!state.title.empty();
+        const std::wstring label=state.hasSession?state.source:L"NOW PLAYING";
+        const std::wstring title=hasTrack?state.title:state.apiAvailable?L"Nothing playing":L"Media controls unavailable";
+        const std::wstring artist=hasTrack?(state.artist.empty()?L"Playing now":state.artist):L"Start audio in a supported app";
+        text(label,w.font,12,D2D1::RectF(18,11,width-118,34),w.accent,false);
+        text(title,w.font,21,D2D1::RectF(18,35,width-118,76),w.color,false);
+        text(artist,w.font,12,D2D1::RectF(18,76,width-118,98),w.color,false);
+
+        const D2D1_RECT_F cover=D2D1::RectF(width-100,12,width-20,92);
+        if(state.thumbnailWidth&&state.thumbnailHeight&&state.thumbnail.size()==static_cast<size_t>(state.thumbnailWidth)*state.thumbnailHeight*4){
+            ID2D1Bitmap* art{};
+            D2D1_BITMAP_PROPERTIES properties{};properties.pixelFormat=D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_PREMULTIPLIED);properties.dpiX=properties.dpiY=96;
+            if(SUCCEEDED(target->CreateBitmap(D2D1::SizeU(state.thumbnailWidth,state.thumbnailHeight),state.thumbnail.data(),state.thumbnailWidth*4,properties,&art))){
+                target->DrawBitmap(art,cover,1.f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);release(art);
+            }
+        }else{
+            setColor(w.accent,.16f);target->FillRoundedRectangle(D2D1::RoundedRect(cover,9,9),brush);
+            setColor(w.accent,.62f);target->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(width-60,51),18,18),brush,1.5f);
+            target->FillEllipse(D2D1::Ellipse(D2D1::Point2F(width-60,51),3,3),brush);
+            target->DrawLine(D2D1::Point2F(width-47,38),D2D1::Point2F(width-47,57),brush,2);
+            target->DrawLine(D2D1::Point2F(width-47,38),D2D1::Point2F(width-40,35),brush,2);
+        }
+        auto triangle=[&](float cx,float cy,bool right,unsigned color){
+            ID2D1PathGeometry* path{};ID2D1GeometrySink* sink{};
+            if(SUCCEEDED(graphics.d2d->CreatePathGeometry(&path))&&SUCCEEDED(path->Open(&sink))){
+                const float direction=right?1.f:-1.f;
+                sink->BeginFigure(D2D1::Point2F(cx-direction*5,cy-7),D2D1_FIGURE_BEGIN_FILLED);
+                sink->AddLine(D2D1::Point2F(cx+direction*6,cy));sink->AddLine(D2D1::Point2F(cx-direction*5,cy+7));
+                sink->EndFigure(D2D1_FIGURE_END_CLOSED);sink->Close();setColor(color);target->FillGeometry(path,brush);release(sink);release(path);
+            }else release(path);
+        };
+        const float cy=137.f;const unsigned active=w.color, muted=0x929B96;
+        // Previous: bar and left-pointing triangle.
+        setColor(state.canPrevious?active:muted,.92f);target->DrawLine(D2D1::Point2F(151,cy-7),D2D1::Point2F(151,cy+7),brush,2);
+        triangle(160,cy,false,state.canPrevious?active:muted);
+        // Play/pause uses the session state supplied by Windows.
+        if(state.playing){
+            setColor(state.canToggle?active:muted,.96f);target->FillRectangle(D2D1::RectF(224,cy-8,229,cy+8),brush);target->FillRectangle(D2D1::RectF(234,cy-8,239,cy+8),brush);
+        }else triangle(231,cy,true,state.canToggle?active:muted);
+        // Next: right-pointing triangle and bar.
+        triangle(300,cy,true,state.canNext?active:muted);setColor(state.canNext?active:muted,.92f);target->DrawLine(D2D1::Point2F(309,cy-7),D2D1::Point2F(309,cy+7),brush,2);
+        text(state.playing?L"PAUSE":L"PLAY",w.font,9,D2D1::RectF(209,153,253,172),w.accent);
+    } else if (w.kind == Kind::Clock) {
         if(c.preset==3){
             auto time=clockText(now,c.hour24,c.seconds);
             text(time.substr(0,2),w.font,144,D2D1::RectF(6,0,width-6,162),w.color);

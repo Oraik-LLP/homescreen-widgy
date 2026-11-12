@@ -10,11 +10,11 @@
 namespace dw {
 inline constexpr wchar_t AppName[] = L"panes";
 inline constexpr int ConfigVersion = 2;
-inline constexpr int WidgetCount = 7, ThemeCount = 5;
+inline constexpr int WidgetCount = 8, ThemeCount = 5;
 inline constexpr std::array<const wchar_t*, 7> BundledFontFamilies{{
     L"Inter", L"Manrope", L"DM Sans", L"Space Grotesk", L"Plus Jakarta Sans", L"Outfit", L"Google Sans Flex"
 }};
-enum class Kind { Clock, Date, Calendar, Focus, Countdown, Battery, WorldClock };
+enum class Kind { Clock, Date, Calendar, Focus, Countdown, Battery, WorldClock, Music };
 struct WidgetConfig {
     Kind kind = Kind::Clock;
     bool visible = true;

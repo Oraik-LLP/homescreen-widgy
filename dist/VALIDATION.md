@@ -1,3 +1,13 @@
+# Panes 1.3.0 validation — 2026-11-12
+
+- Native executable, portable ZIP, and installer compiled with Music support.
+- A read-only check successfully acquired Windows' current media session and
+  decoded its artwork into a bounded thumbnail (36,352 bytes in this session).
+- Playback commands require hands-on review with the user's chosen player.
+- Music remains hidden by default and uses appended widget ID 7.
+- Website source includes both supplied wallpaper screenshots with eager image
+  loading and a Windows inspired light appearance.
+
 # Panes 1.2.1 validation — 2026-11-12
 
 ## Build and release checks

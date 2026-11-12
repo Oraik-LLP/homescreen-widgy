@@ -40,12 +40,14 @@ int wmain(int argc,wchar_t** argv) {
         loaded=loadConfig(path);require(!loaded.writable&&!loaded.warning.empty(),"Preserve malformed configuration");
         {std::ifstream f(path);std::string data;f>>data;require(data=="{broken","Bad settings are never overwritten on load");}
         require(logicalSize(Kind::Clock,0,100,false).cx<logicalSize(Kind::Clock,0,100,true).cx,"Seconds receive more surface space");
+        {std::ofstream f(path);f<<R"({"version":2,"preset":4,"widgets":[{"id":0,"x":77}]})";}
+        loaded=loadConfig(path);require(!loaded.value.widgets[7].visible&&loaded.value.widgets[7].color==Themes[4].text&&loaded.value.widgets[0].x==77,"Older version 2 settings retain placement and give Music the active theme");
         Config expanded;applyTheme(expanded,3);expanded.widgets[3].visible=true;expanded.widgets[5].customColors=true;
         expanded.wallpaperMatch[3]=true;expanded.eventTitle=L"Launch — 日本";expanded.eventUtc=utcNow()+90000;
         expanded.city=L"New York";expanded.zone=L"Eastern Standard Time";expanded.focus.running=true;expanded.focus.deadline=utcNow()+500;
         expanded.recent={0x123456,0xABCDEF};expanded.favorites={0xFFFFFF};
         saveConfig(path,expanded);loaded=loadConfig(path);
-        require(loaded.value.widgets.size()==7&&!loaded.value.widgets[4].visible&&loaded.value.widgets[3].visible,"New widgets are optional with stable IDs");
+        require(loaded.value.widgets.size()==8&&!loaded.value.widgets[4].visible&&loaded.value.widgets[3].visible&&!loaded.value.widgets[7].visible&&loaded.value.widgets[7].kind==Kind::Music,"Music appends stable ID 7 and starts hidden");
         require(loaded.value.wallpaperMatch[3]&&loaded.value.preset==3&&loaded.value.widgets[5].customColors,"Theme and manual colors persist");
         require(loaded.value.eventTitle==expanded.eventTitle&&loaded.value.eventUtc==expanded.eventUtc&&loaded.value.zone==expanded.zone,"Event and time zone round trip");
         require(loaded.value.focus.deadline==expanded.focus.deadline&&loaded.value.focus.running&&loaded.value.recent==expanded.recent&&loaded.value.favorites==expanded.favorites,"Timer deadline and palettes persist");

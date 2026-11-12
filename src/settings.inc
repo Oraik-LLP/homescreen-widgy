@@ -143,10 +143,11 @@ void App::refreshPreviews(){
 }
 void App::refreshWidgetPreviews(){
     SYSTEMTIME t{};t.wYear=2026;t.wMonth=11;t.wDay=12;t.wHour=10;t.wMinute=8;
+    MediaSnapshot demo;demo.apiAvailable=demo.hasSession=demo.playing=demo.canPrevious=demo.canToggle=demo.canNext=true;demo.source=L"Now playing";demo.title=L"Midnight City";demo.artist=L"M83";
     for(int i=0;i<WidgetCount;++i){
         if(!widgetPreviews[i])widgetPreviews[i]=std::make_unique<Surface>(*graphics);
         Config c=draft;auto& w=c.widgets[i];w.visible=true;w.opacity=100;w.scale=100;w.backing=true;
-        widgetPreviews[i]->draw(settings,w,c,t,false,false,96);
+        widgetPreviews[i]->draw(settings,w,c,t,false,false,96,w.kind==Kind::Music?&demo:nullptr);
     }
 }
 void App::populateSettings(){
@@ -162,6 +163,7 @@ void App::populateSettings(){
     int zoneIndex=0;for(size_t i=0;i<zones.size();++i)if(draft.zone==zones[i].TimeZoneKeyName)zoneIndex=static_cast<int>(i+1);SendMessageW(child(Zone),CB_SETCURSEL,zoneIndex,0);
     SetWindowTextW(child(ToolHex),colorText(toolColor).c_str());
     SetWindowTextW(child(Status),warning.empty()?L"Native · offline · static themes":warning.c_str());
+    if(w.kind==Kind::Music&&warning.empty())SetWindowTextW(child(Status),L"Unlock widgets from the tray to use playback controls. Drag outside the controls to move Music.");
     for(size_t i=0;i<12;++i)SetWindowTextW(child(RecentFirst+static_cast<int>(i)),i<config.recent.size()?colorText(config.recent[i]).c_str():L"Empty recent");
     for(size_t i=0;i<8;++i)SetWindowTextW(child(FavoriteFirst+static_cast<int>(i)),i<config.favorites.size()?colorText(config.favorites[i]).c_str():L"Empty favorite");
     populating=false;layoutSettings();
@@ -190,7 +192,7 @@ bool App::applySettings(){
     bool startup=SendMessageW(child(Startup),BM_GETCHECK,0,0)==BST_CHECKED;
     if(!isolated&&startup!=startupEnabled()&&!setStartup(startup)){SetWindowTextW(child(Status),L"Windows could not update launch at sign-in.");return false;}
     bool matchChanged=candidate.preset!=config.preset||candidate.wallpaperMatch!=config.wallpaperMatch;
-    config=candidate;draft=config;
+    config=candidate;draft=config;updateMedia();
     for(auto& w:widgets){w.surface->clearFormats();place(w);}if(matchChanged)requestWallpaper();render(true);repair();schedule();save();populateSettings();
     SetWindowTextW(child(Status),configWritable?L"Applied. Widgets stay behind your apps.":L"Applied for this session. Reset layout to recover saved settings.");return true;
 }
@@ -251,7 +253,7 @@ LRESULT CALLBACK App::SettingsProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
         else if(id>=WidgetFirst&&id<WidgetFirst+WidgetCount){
             int index=id-WidgetFirst;
             if(a->applySettings()){
-                a->selected=index;auto& cfg=a->config.widgets[index];bool added=!cfg.visible;cfg.visible=true;a->config.shown=true;a->draft=a->config;
+                a->selected=index;auto& cfg=a->config.widgets[index];bool added=!cfg.visible;cfg.visible=true;a->config.shown=true;a->draft=a->config;a->updateMedia();
                 a->place(a->widgets[index]);a->widgets[index].dirty=true;a->page=0;a->scroll=0;a->render(true);a->repair();a->schedule();a->save();a->populateSettings();
                 auto message=added?std::wstring(L"Added ")+kindName(cfg.kind)+L". Unlock widgets from the tray to move it.":std::wstring(kindName(cfg.kind))+L" is already on your desktop; selected.";
                 SetWindowTextW(a->child(Status),message.c_str());

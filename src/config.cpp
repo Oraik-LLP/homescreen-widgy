@@ -33,7 +33,7 @@ std::filesystem::path defaultRoot() {
     return result;
 }
 const wchar_t* kindName(Kind k) {
-    static constexpr const wchar_t* names[]{L"Clock",L"Date",L"Calendar",L"Focus timer",L"Event countdown",L"Battery",L"World clock"};
+    static constexpr const wchar_t* names[]{L"Clock",L"Date",L"Calendar",L"Focus timer",L"Event countdown",L"Battery",L"World clock",L"Music"};
     return names[std::clamp(static_cast<int>(k),0,WidgetCount-1)];
 }
 bool leapYear(int y) { return y % 4 == 0 && (y % 100 != 0 || y % 400 == 0); }
@@ -59,7 +59,8 @@ UINT nextTick(const SYSTEMTIME& now, bool seconds) {
     return seconds ? 1000 - now.wMilliseconds : 60000 - now.wSecond * 1000 - now.wMilliseconds;
 }
 SIZE logicalSize(Kind k, int preset, int scale, bool seconds) {
-    SIZE base = k == Kind::Clock ? (preset==3 ? SIZE{300,340} : SIZE{seconds ? 660L : 490L, preset==0 ? 180L : 160L})
+    SIZE base = k == Kind::Music ? SIZE{460,180}
+              : k == Kind::Clock ? (preset==3 ? SIZE{300,340} : SIZE{seconds ? 660L : 490L, preset==0 ? 180L : 160L})
               : k == Kind::Date ? SIZE{600,75} : k == Kind::Calendar ? SIZE{330,340} : SIZE{330,150};
     return {MulDiv(base.cx, scale, 100), MulDiv(base.cy, scale, 100)};
 }
@@ -105,6 +106,9 @@ LoadResult loadConfig(const std::filesystem::path& path) {
         c.shown = boolean(obj, "shown", true); c.locked = boolean(obj, "locked", true);
         c.seconds = boolean(obj, "seconds", false); c.hour24 = boolean(obj, "hour24", true);
         c.preset = bounded(obj, "preset", 0, 0, ThemeCount-1);
+        // Music is absent from older version 2 files; start it in the active theme.
+        auto& music=c.widgets[static_cast<int>(Kind::Music)];
+        music.font=Themes[c.preset].font;music.color=Themes[c.preset].text;music.accent=Themes[c.preset].accent;
         if(obj.contains("wallpaperMatch")&&obj["wallpaperMatch"].is_array())
             for(size_t i=0;i<std::min(obj["wallpaperMatch"].size(),c.wallpaperMatch.size());++i)if(obj["wallpaperMatch"][i].is_boolean())c.wallpaperMatch[i]=obj["wallpaperMatch"][i].get<bool>();
         auto timestamp=[](const json& o,const char* key,long long fallback){if(!o.contains(key)||!o[key].is_number_integer())return fallback;return std::clamp(o[key].get<long long>(),0LL,265046774399LL);};

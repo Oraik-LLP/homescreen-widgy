@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0 — 2026-11-12
+
+- Added an optional Music widget to the Add Widget gallery, showing the current
+  Windows media session's app, track, artist, artwork, and playback state.
+- Added previous, play/pause, and next controls while widgets are unlocked, with
+  media-key fallback when session control is unavailable.
+- Media work runs in the background only while the widget is visible. Artwork
+  is limited to 128 pixels and reused until track metadata changes.
+- Updated the website with both supplied wallpaper screenshots and a Windows
+  inspired light appearance using Segoe UI.
+
 ## 1.2.1 — 2026-11-12
 
 - Refined Soft with Tagme’s butter-yellow, cream, and amber palette, minimal

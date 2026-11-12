@@ -10,12 +10,13 @@ int wmain(int argc,wchar_t** argv){
         if(argc!=2)throw std::runtime_error("Pass a dedicated preview output directory");
         auto root=std::filesystem::absolute(argv[1]);std::filesystem::create_directories(root);
         Graphics graphics;Surface surface(graphics);SYSTEMTIME now{};now.wYear=2026;now.wMonth=11;now.wDay=12;now.wHour=10;now.wMinute=8;now.wSecond=42;
-        if(graphics.bundled->GetFontFamilyCount()!=3)throw std::runtime_error("Expected three private bundled families");
+        if(graphics.bundled->GetFontFamilyCount()!=BundledFontFamilies.size())throw std::runtime_error("Expected all private bundled families");
+        MediaSnapshot media;media.apiAvailable=media.hasSession=media.playing=media.canToggle=true;media.source=L"Music player";media.title=L"A very long track title to verify trimming";media.artist=L"Artist";
         int count=0;
         for(int theme=0;theme<ThemeCount;++theme)for(UINT dpi:{96u,144u,192u}){
             Config c;applyTheme(c,theme);c.eventTitle=L"A very long event title to verify graceful trimming";c.city=L"A very long world clock label to verify trimming";c.eventUtc=utcNow()+95000;
             for(int i=0;i<WidgetCount;++i){
-                surface.draw(nullptr,c.widgets[i],c,now,false,false,dpi);
+                surface.draw(nullptr,c.widgets[i],c,now,false,false,dpi,i==static_cast<int>(Kind::Music)?&media:nullptr);
                 auto path=root/(L"theme-"+std::to_wstring(theme)+L"-widget-"+std::to_wstring(i)+L"-dpi-"+std::to_wstring(dpi)+L".bmp");surface.saveBmp(path);++count;
                 auto logical=logicalSize(static_cast<Kind>(i),theme,100,false);if(surface.size().cx!=MulDiv(logical.cx,dpi,96))throw std::runtime_error("Incorrect DPI-scaled surface width");
             }
