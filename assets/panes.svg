@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>panes — four window panes</title>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#213A30"/>
+  <rect x="50" y="50" width="73" height="73" rx="13" fill="#F2F4E8"/>
+  <rect x="134" y="50" width="73" height="73" rx="13" fill="#B9D3B8"/>
+  <rect x="50" y="134" width="73" height="73" rx="13" fill="#91B89D"/>
+  <rect x="134" y="134" width="73" height="73" rx="13" fill="#D6D5A3"/>
+</svg>

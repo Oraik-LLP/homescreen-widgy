@@ -1,0 +1,18 @@
+panes 1.0.0
+
+nlohmann/json v3.12.0 — MIT License. Full license: json.LICENSE.
+Source: https://github.com/nlohmann/json/tree/v3.12.0
+
+Build toolchain: llvm-mingw 20261104 (LLVM, MinGW-w64, libc++).
+When built using the portable toolchain, the executable statically links its
+runtime libraries. LLVM is licensed under Apache-2.0 WITH LLVM-exception;
+MinGW-w64 runtime and headers contain permissive/public-domain components.
+The complete corresponding license files are shipped in the licenses folder
+of distributions built with that toolchain. See tools/README.md for sources.
+
+Inno Setup creates the installer. Its compiler is not included in the app.
+Source: https://jrsoftware.org/
+
+Windows graphics and shell libraries are supplied by Windows.
+Fonts are resolved from the user's installed fonts. No fonts, wallpapers,
+Rainmeter source code, or third-party skin artwork are bundled.
