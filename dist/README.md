@@ -10,11 +10,11 @@ require Rainmeter, .NET, WebView, or a browser process.
 
 ## Install and use
 
-[Download the Windows installer](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-Setup-1.3.1-x64.exe),
+[Download the Windows installer](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-Setup-1.3.2-x64.exe),
 [standalone EXE](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes.exe),
-or [portable ZIP](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-1.3.1-x64.zip).
+or [portable ZIP](https://github.com/Oraik-LLP/homescreen-widgy/raw/refs/heads/main/dist/panes-1.3.2-x64.zip).
 
-Run `dist/panes-Setup-1.3.1-x64.exe`. Installation is per user and
+Run `dist/panes-Setup-1.3.2-x64.exe`. Installation is per user and
 does not require administrator rights. Launch at sign-in and a desktop
 shortcut are optional and off by default. The ZIP can also run directly.
 
@@ -51,8 +51,17 @@ are stored in monitor-relative DIPs. If a monitor disappears, its widgets
 move to the primary monitor. An unavailable font falls back to Segoe UI. Version 1 settings migrate
 automatically with the original saved as settings.json.v1.bak.
 Invalid or future-version settings are preserved and defaults run without
-overwriting them. **Reset layout** makes a backup before recovering such a file.
+overwriting them. **Reset to defaults** makes a backup before recovering such a file.
 Uninstall removes the app and its sign-in entry, and keeps your settings.
+
+## New in 1.3.2
+
+- Dragged widget positions survive Finish editing and subsequent Settings actions.
+- Edit mode shows a monitor-aware grid and snaps to 24 DIP spacing. Hold Shift
+  while dragging for free placement.
+- Soft glass uses a cached frosted wallpaper backdrop with a contrast-aware tint.
+- **Reset to defaults** restores the initial configuration and saves a backup
+  named `settings.before-reset-*.json` beside your settings file.
 
 ## New in 1.3.1
 

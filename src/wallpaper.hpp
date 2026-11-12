@@ -15,6 +15,7 @@ struct WallpaperImage {
 };
 struct WallpaperResult { std::vector<WallpaperImage> images; std::wstring warning; unsigned decoded=0; size_t peakPrivate=0; };
 WidgetConfig matchWallpaper(const WidgetConfig& widget,RECT screen,const WallpaperImage& image);
+GlassTile frostedWallpaper(RECT screen,const WallpaperImage& image);
 class WallpaperMatcher {
     std::future<WallpaperResult> pending;
     unsigned generation=0, launched=0;

@@ -1,3 +1,13 @@
+# Panes 1.3.2 validation — 2026-11-12
+
+- 58 core checks passed, including grid snapping on negative-coordinate displays,
+  200% DPI spacing, work-area clamping, and bounded frosted wallpaper tiles.
+- 140 theme/widget/DPI previews and a light-text glass preview rendered; light
+  and dark glass treatments were visually inspected.
+- All 46 isolated application checks passed, including dragged positions surviving
+  Finish editing and a gallery action, grid visibility, and reset backup creation.
+- Reset to defaults and the glass runtime use isolated settings during validation.
+
 # Panes 1.3.1 validation — 2026-11-12
 
 - 53 core checks and 140 theme/widget/DPI render previews completed successfully.

@@ -23,6 +23,9 @@ int wmain(int argc,wchar_t** argv) {
         auto p=clampPosition({-500,2000},{500,300},{-1920,0,0,1080});
         require(p.x==-500&&p.y==780,"Negative monitor coordinates and bottom clamp");
         p=clampPosition({20,30},{3000,2000},{0,0,1920,1080});require(p.x==0&&p.y==0,"Oversized widget remains reachable");
+        p=snapPosition({-1894,38},{200,100},{-1920,0,0,1080},96);require(p.x==-1896&&p.y==48,"Grid uses monitor-relative coordinates on negative displays");
+        p=snapPosition({-1870,70},{200,100},{-1920,0,0,1080},192);require(p.x==-1872&&p.y==48,"Grid spacing follows 200 percent DPI");
+        p=snapPosition({-5,1040},{200,100},{-1920,0,0,1080},96);require(p.x==-200&&p.y==980,"Grid snapping keeps widgets inside the work area");
         unsigned color{};require(parseColor(L"#91B89D",color)&&color==0x91b89d,"Hex colors");
         require(!parseColor(L"#12345Z",color)&&!parseColor(L"#123",color),"Reject malformed colors");
         require(wide(utf8(L"日本語 — café"))==L"日本語 — café","Unicode round trip");
@@ -82,12 +85,14 @@ int wmain(int argc,wchar_t** argv) {
         std::vector<unsigned> colors;for(unsigned i=0;i<20;++i)rememberColor(colors,i,12);rememberColor(colors,15,12);
         require(colors.size()==12&&colors[0]==15&&std::count(colors.begin(),colors.end(),15)==1,"Recent colors are bounded and deduplicated");
         WallpaperImage image;image.valid=true;image.bounds={0,0,1000,800};image.desktop=image.bounds;image.accent=0x8899AA;
+        image.background=0x112233;auto glass=frostedWallpaper({100,100,400,250},image);require(glass.width==64&&glass.height==48&&std::all_of(glass.pixels.begin(),glass.pixels.end(),[](unsigned p){return p==0xff112233;}),"Frosted solid wallpapers retain their color in a bounded tile");
         image.background=0;auto matched=matchWallpaper(Config{}.widgets[0],{100,100,400,250},image);require(matched.color==0xF8F7F4,"Dark wallpaper chooses light text");
         image.background=0xFFFFFF;matched=matchWallpaper(Config{}.widgets[0],{100,100,400,250},image);require(matched.color==0x202520,"Light wallpaper chooses dark text");
         image.width=8;image.height=8;image.originalWidth=1000;image.originalHeight=800;for(int i=0;i<64;++i)image.pixels.push_back(i%2?0:0xFFFFFF);
         matched=matchWallpaper(Config{}.widgets[0],{0,0,1000,800},image);require(matched.backing,"Busy wallpaper adds a contrast backing");
         auto manual=Config{}.widgets[0];manual.customColors=true;manual.color=0x123456;require(matchWallpaper(manual,{0,0,1000,800},image).color==0x123456,"Manual colors override wallpaper matching");
         image.valid=false;manual.customColors=false;require(matchWallpaper(manual,{0,0,1000,800},image).color==0x123456,"Unreadable wallpaper retains theme colors");
+        require(frostedWallpaper({0,0,1000,800},image).pixels.empty(),"Missing wallpaper uses translucent glass fallback");
         saveConfig(path,Config{});
         std::cout<<checks<<" checks passed\n";return 0;
     }catch(const std::exception& e){std::cerr<<"FAILED: "<<e.what()<<'\n';return 1;}

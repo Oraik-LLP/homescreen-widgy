@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <sstream>
 #include <limits>
+#include <cmath>
 
 namespace dw {
 using json = nlohmann::json;
@@ -67,6 +68,11 @@ SIZE logicalSize(Kind k, int preset, int scale, bool seconds) {
 POINT clampPosition(POINT p, SIZE s, RECT work) {
     return {std::clamp(p.x, work.left, std::max(work.left, work.right-s.cx)),
             std::clamp(p.y, work.top, std::max(work.top, work.bottom-s.cy))};
+}
+POINT snapPosition(POINT p,SIZE s,RECT work,UINT dpi){
+    const int step=std::max(1,MulDiv(24,dpi,96));
+    auto snap=[&](LONG value,LONG origin){return origin+static_cast<LONG>(std::floor((value-origin)/static_cast<double>(step)+.5))*step;};
+    return clampPosition({snap(p.x,work.left),snap(p.y,work.top)},s,work);
 }
 bool parseColor(const std::wstring& text, unsigned& result) {
     auto s = text;

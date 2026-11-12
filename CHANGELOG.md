@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.2 — 2026-11-12
+
+- Fixed dragged positions reverting when another Settings action reapplied an
+  older draft. Placement now follows the current desktop layout.
+- Added a visible per-monitor alignment grid and 24 DIP snapping in Edit mode.
+  Hold Shift while dragging to move freely.
+- Soft glass now uses cached, blurred wallpaper tiles and a light or dark tint
+  that keeps the selected text readable. Wallpaper work remains local.
+- Added Reset to defaults, which backs up settings before restoring the initial
+  layout, appearance, and widget visibility.
+
 ## 1.3.1 — 2026-11-12
 
 - Added a visible Edit mode button in Settings and a matching tray command.

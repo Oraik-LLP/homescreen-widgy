@@ -21,11 +21,26 @@ constexpr UINT_PTR TickTimer=1, RetryTimer=2, DiagnosticTimer=3, WallpaperTimer=
 constexpr int MenuSettings=101, MenuLock=102, MenuShow=103, MenuExit=104, MenuPalette=105, MenuFocus=106, MenuFocusReset=107, MenuFocusNext=108;
 constexpr wchar_t WidgetClass[]=L"panes.Widget.v1", ControlClass[]=L"panes.Controller.v1", SettingsClass[]=L"panes.Settings.v1";
 constexpr wchar_t PickerClass[]=L"panes.Picker.v1";
+constexpr wchar_t GridClass[]=L"panes.AlignmentGrid.v1";
+static LRESULT CALLBACK GridProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
+    if(msg==WM_NCCREATE)SetWindowLongPtrW(hwnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams));
+    if(msg==WM_NCHITTEST)return HTTRANSPARENT;
+    if(msg==WM_MOUSEACTIVATE)return MA_NOACTIVATE;
+    if(msg==WM_ERASEBKGND)return 1;
+    if(msg==WM_PAINT){PAINTSTRUCT ps{};HDC dc=BeginPaint(hwnd,&ps);RECT r{};GetClientRect(hwnd,&r);auto fill=CreateSolidBrush(RGB(1,2,3));FillRect(dc,&r,fill);DeleteObject(fill);
+        int step=std::max(1,MulDiv(24,static_cast<int>(GetWindowLongPtrW(hwnd,GWLP_USERDATA)),96));
+        auto minor=CreatePen(PS_SOLID,1,RGB(160,195,225)),major=CreatePen(PS_SOLID,1,RGB(245,250,255));auto old=SelectObject(dc,minor);
+        for(int x=0;x<r.right;x+=step){SelectObject(dc,(x/step)%4?minor:major);MoveToEx(dc,x,0,nullptr);LineTo(dc,x,r.bottom);}
+        for(int y=0;y<r.bottom;y+=step){SelectObject(dc,(y/step)%4?minor:major);MoveToEx(dc,0,y,nullptr);LineTo(dc,r.right,y);}
+        SelectObject(dc,old);DeleteObject(minor);DeleteObject(major);EndPaint(hwnd,&ps);return 0;
+    }return DefWindowProcW(hwnd,msg,wp,lp);
+}
 class App;
 static App* currentApp{};
 struct Widget {
     App* app{}; int index{}; HWND window{}; std::unique_ptr<Surface> surface;
     SYSTEMTIME last{}; bool dirty=true, dragging=false; POINT mouse{}, origin{};
+    GlassTile glass;RECT glassBounds{};unsigned glassRevision=0;
 };
 enum ControlId { SelectWidget=201, Preset, Font, Scale, Opacity, Color, Accent, Visible, Hour24, Seconds, Startup, Apply, Reset, Done, Status, TabWidgets, TabAppearance, TabColors, MatchWallpaper, UseTheme, PickText, PickAccent, TextSwatch, AccentSwatch,
     FocusMinutes, BreakMinutes, FocusStart, FocusReset, FocusNext, EventTitle, EventDate, Zone, City,
@@ -50,6 +65,7 @@ public:
     unsigned toolColor=0x91B89D;ULONGLONG lastPick=0;
     bool populating=false;
     std::vector<Monitor> monitors;
+    std::vector<HWND> grids;unsigned wallpaperRevision=1;
     std::vector<HWINEVENTHOOK> hooks;
     NOTIFYICONDATAW tray{}; HFONT uiFont{},titleFont{}; HBRUSH background{};
     explicit App(HINSTANCE h):instance(h){}
@@ -60,6 +76,7 @@ public:
     void showSettings(); void makeSettingsControls(); void populateSettings(); bool applySettings();
     bool readSettings(Config& candidate);void layoutSettings();void refreshPreviews();void refreshWidgetPreviews();void colorTool(unsigned color,bool remember=true);void chooseColor(int id);void startPicker();void endPicker(bool accept);
     void focusCommand(int action);void completeFocus();void requestWallpaper();void updateMedia();WidgetConfig effectiveWidget(const Widget& w) const;
+    const GlassTile* glassFor(Widget& w);
     HWND child(int id) const {HWND w=panel?GetDlgItem(panel,id):nullptr;return w?w:GetDlgItem(settings,id);}
     void sample(); void finishDiagnostics(); bool startupEnabled() const; bool setStartup(bool on);
     void runChecks();
@@ -99,6 +116,7 @@ static void CALLBACK eventProc(HWINEVENTHOOK,DWORD event,HWND hwnd,LONG object,L
 App::~App() {
     currentApp=nullptr;
     media.stop();
+    for(auto grid:grids)DestroyWindow(grid);
     if(picker)DestroyWindow(picker);
     for(auto hook:hooks) if(hook) UnhookWinEvent(hook);
     if(control) { WTSUnRegisterSessionNotification(control); Shell_NotifyIconW(NIM_DELETE,&tray); }
@@ -111,6 +129,7 @@ App::~App() {
     graphics.reset(); if(mutex) CloseHandle(mutex); if(desktopMutex)CloseHandle(desktopMutex);
 }
 void App::loadMonitors() {
+    for(auto grid:grids)DestroyWindow(grid);grids.clear();
     monitors.clear();
     EnumDisplayMonitors(nullptr,nullptr,[](HMONITOR h,HDC,LPRECT,LPARAM p)->BOOL {
         auto* self=reinterpret_cast<App*>(p); MONITORINFOEXW info{}; info.cbSize=sizeof(info);
@@ -152,6 +171,7 @@ void App::remember(Widget& w) {
     auto& cfg=config.widgets[w.index];cfg.monitor=it->device;
     SIZE size{r.right-r.left,r.bottom-r.top};auto p=clampPosition({r.left,r.top},size,it->work);
     cfg.x=MulDiv(p.x-it->work.left,96,it->dpi);cfg.y=MulDiv(p.y-it->work.top,96,it->dpi);cfg.positioned=true;
+    auto& pending=draft.widgets[w.index];pending.x=cfg.x;pending.y=cfg.y;pending.monitor=cfg.monitor;pending.positioned=true;w.dirty=true;
     SetWindowPos(w.window,nullptr,p.x,p.y,0,0,SWP_NOZORDER|SWP_NOSIZE|SWP_NOACTIVATE);save();
 }
 void App::requestRepair() {
@@ -161,12 +181,19 @@ void App::repair() {
     repairPending=false;
     desktopHost=discoverDesktop();
     if(!desktopHost) {
+        for(auto grid:grids)DestroyWindow(grid);grids.clear();
         status=L"Waiting for the Windows desktop";
         for(auto& w:widgets) ShowWindow(w.window,SW_HIDE);
         if(retries++<12) SetTimer(control,RetryTimer,std::min(2000,150*(retries+1)),nullptr);
         return;
     }
     retries=0;KillTimer(control,RetryTimer);status=L"Desktop mode · offline";
+    if(config.locked||!config.shown||paused){for(auto grid:grids)DestroyWindow(grid);grids.clear();}
+    else if(grids.empty())for(const auto& monitor:monitors){
+        auto grid=CreateWindowExW(WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,GridClass,L"Alignment grid",WS_POPUP,monitor.work.left,monitor.work.top,monitor.work.right-monitor.work.left,monitor.work.bottom-monitor.work.top,nullptr,nullptr,instance,reinterpret_cast<void*>(static_cast<INT_PTR>(monitor.dpi)));
+        if(grid){SetLayeredWindowAttributes(grid,RGB(1,2,3),105,LWA_COLORKEY|LWA_ALPHA);grids.push_back(grid);SetWindowPos(grid,GetWindow(desktopHost,GW_HWNDPREV),0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW);}
+    }
+    for(auto grid:grids)ShowWindow(grid,SW_SHOWNOACTIVATE);
     // Place immediately above the actual icon-host root. No cross-process
     // SetParent, injected shell DLL, topmost window, or wallpaper modification.
     for(auto& w:widgets) {
@@ -179,11 +206,12 @@ void App::repair() {
         while(before) {
             bool ours=before==control || before==settings;
             for(const auto& other:widgets) ours=ours || before==other.window;
+            for(auto grid:grids)ours=ours||before==grid;
             if(!ours) break;
             before=GetWindow(before,GW_HWNDPREV);
         }
-        if(IsIconic(w.window)) ShowWindow(w.window,SW_SHOWNOACTIVATE);
         SetWindowPos(w.window,before?before:HWND_TOP,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW);
+        ShowWindow(w.window,SW_SHOWNOACTIVATE);
     }
     if(settings) SetWindowTextW(child(Status),status.c_str());
 }
@@ -202,7 +230,7 @@ WidgetConfig App::effectiveWidget(const Widget& widget) const {
 void App::requestWallpaper(){
     KillTimer(control,WallpaperTimer);
     if(paused)return;
-    if(!config.wallpaperMatch[config.preset]){wallpaper.cancel();if(wallpaper.busy())SetTimer(control,WallpaperPoll,100,nullptr);return;}
+    if(!config.wallpaperMatch[config.preset]&&config.preset!=4){wallpaper.cancel();++wallpaperRevision;if(wallpaper.busy())SetTimer(control,WallpaperPoll,100,nullptr);return;}
     wallpaper.request(monitors);SetTimer(control,WallpaperPoll,100,nullptr);SetTimer(control,WallpaperTimer,60000,nullptr);
 }
 void App::completeFocus(){
@@ -228,7 +256,7 @@ void App::render(bool force) {
         bool changed=cfg.kind==Kind::Music?false:cfg.kind==Kind::Date||cfg.kind==Kind::Calendar?dateChanged:
             cfg.kind==Kind::Clock?(config.seconds?secondChanged:minuteChanged):
             cfg.kind==Kind::Focus?(config.focus.running&&secondChanged):minuteChanged;
-        if(force||w.dirty||changed){auto effective=effectiveWidget(w);w.surface->draw(w.window,effective,config,now,!config.locked,true,0,cfg.kind==Kind::Music?&mediaState:nullptr);w.last=now;w.dirty=false;}
+        if(force||w.dirty||changed){auto effective=effectiveWidget(w);w.surface->draw(w.window,effective,config,now,!config.locked,true,0,cfg.kind==Kind::Music?&mediaState:nullptr,config.preset==4?glassFor(w):nullptr);w.last=now;w.dirty=false;}
     }
 }
 void App::schedule() {
@@ -243,6 +271,13 @@ void App::schedule() {
     if(needed)SetTimer(control,TickTimer,std::max(1u,interval),nullptr);
 }
 void App::updateMedia(){media.setEnabled(!paused&&config.shown&&config.widgets[static_cast<int>(Kind::Music)].visible);}
+const GlassTile* App::glassFor(Widget& w){
+    RECT rect{};GetWindowRect(w.window,&rect);POINT center{(rect.left+rect.right)/2,(rect.top+rect.bottom)/2};
+    auto image=std::find_if(wallpaper.result.images.begin(),wallpaper.result.images.end(),[&](const auto& item){return PtInRect(&item.bounds,center)&&item.valid;});
+    if(image==wallpaper.result.images.end())return nullptr;
+    if(w.glassRevision!=wallpaperRevision||!EqualRect(&rect,&w.glassBounds)){w.glass=frostedWallpaper(rect,*image);w.glassBounds=rect;w.glassRevision=wallpaperRevision;}
+    return &w.glass;
+}
 void App::addTray() {
     tray={};tray.cbSize=sizeof(tray);tray.hWnd=control;tray.uID=1;
     tray.uFlags=NIF_ICON|NIF_MESSAGE|NIF_TIP;tray.uCallbackMessage=TrayMessage;
@@ -279,6 +314,7 @@ void App::init() {
     if(prototype)for(int i=1;i<WidgetCount;++i)config.widgets[i].visible=false;
     WNDCLASSEXW wc{};wc.cbSize=sizeof(wc);wc.hInstance=instance;wc.lpfnWndProc=ControlProc;wc.lpszClassName=ControlClass;
     wc.hIcon=LoadIconW(instance,MAKEINTRESOURCEW(1));RegisterClassExW(&wc);
+    wc.lpfnWndProc=GridProc;wc.lpszClassName=GridClass;RegisterClassExW(&wc);
     wc.lpfnWndProc=WidgetProc;wc.lpszClassName=WidgetClass;wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);RegisterClassExW(&wc);
     wc.lpfnWndProc=SettingsProc;wc.lpszClassName=SettingsClass;wc.hbrBackground=static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH));RegisterClassExW(&wc);
     wc.lpfnWndProc=PickerProc;wc.lpszClassName=PickerClass;wc.hCursor=LoadCursorW(nullptr,IDC_CROSS);wc.hbrBackground=nullptr;RegisterClassExW(&wc);
@@ -326,7 +362,10 @@ LRESULT CALLBACK App::WidgetProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
         w->dragging=true;GetCursorPos(&w->mouse);RECT r{};GetWindowRect(hwnd,&r);w->origin={r.left,r.top};SetCapture(hwnd);
         }return 0;
     }
-    case WM_MOUSEMOVE:if(w->dragging) {POINT p{};GetCursorPos(&p);SetWindowPos(hwnd,nullptr,w->origin.x+p.x-w->mouse.x,w->origin.y+p.y-w->mouse.y,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);}return 0;
+    case WM_MOUSEMOVE:if(w->dragging) {POINT p{};GetCursorPos(&p);POINT target{w->origin.x+p.x-w->mouse.x,w->origin.y+p.y-w->mouse.y};RECT rect{};GetWindowRect(hwnd,&rect);
+        auto monitor=std::find_if(a.monitors.begin(),a.monitors.end(),[&](const auto& m){return m.handle==MonitorFromPoint(p,MONITOR_DEFAULTTONEAREST);});
+        if(monitor!=a.monitors.end()&&!(GetAsyncKeyState(VK_SHIFT)&0x8000))target=snapPosition(target,{rect.right-rect.left,rect.bottom-rect.top},monitor->work,monitor->dpi);
+        SetWindowPos(hwnd,nullptr,target.x,target.y,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);w->dirty=true;a.render();}return 0;
     case WM_LBUTTONUP:if(w->dragging) {w->dragging=false;ReleaseCapture();a.remember(*w);}return 0;
     case WM_CAPTURECHANGED:if(w->dragging) {w->dragging=false;a.remember(*w);}return 0;
     case WM_RBUTTONUP:a.trayMenu();return 0;
@@ -357,7 +396,7 @@ LRESULT CALLBACK App::ControlProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             else if(wp==RetryTimer){KillTimer(hwnd,RetryTimer);a->repair();}
             else if(wp==DiagnosticTimer)a->sample();
             else if(wp==WallpaperTimer)a->requestWallpaper();
-            else if(wp==WallpaperPoll){if(a->wallpaper.poll()){a->render(true);if(a->settings&&!a->wallpaper.result.warning.empty())SetWindowTextW(a->child(Status),a->wallpaper.result.warning.c_str());}if(!a->wallpaper.busy())KillTimer(hwnd,WallpaperPoll);}
+            else if(wp==WallpaperPoll){if(a->wallpaper.poll()){++a->wallpaperRevision;a->render(true);if(a->settings&&!a->wallpaper.result.warning.empty())SetWindowTextW(a->child(Status),a->wallpaper.result.warning.c_str());}if(!a->wallpaper.busy())KillTimer(hwnd,WallpaperPoll);}
             return 0;
         case WM_DISPLAYCHANGE:case WM_SETTINGCHANGE:
             a->loadMonitors();for(auto& w:a->widgets)if(!w.dragging)a->place(w);a->render(true);a->repair();a->requestWallpaper();a->save();return 0;
@@ -435,6 +474,11 @@ void App::runChecks() {
         expect(wc.monitor==monitors.front().device && rect.left>=work.left && rect.top>=work.top && rect.left<work.right,"Disconnected monitor restores to primary display");
         showSettings();
         command(MenuLock);expect(!config.locked&&applySettings()&&!config.locked,"Applying Settings retains Edit mode");command(MenuLock);
+        command(MenuLock);expect(!grids.empty()&&IsWindowVisible(grids.front()),"Edit mode displays an alignment grid");
+        RECT moved{};GetWindowRect(widgets[0].window,&moved);SetWindowPos(widgets[0].window,nullptr,moved.left-24,moved.top+24,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);remember(widgets[0]);
+        const int movedX=config.widgets[0].x,movedY=config.widgets[0].y;command(MenuLock);expect(grids.empty(),"Finish editing removes the grid");
+        SendMessageW(settings,WM_COMMAND,MAKEWPARAM(AddWidget,BN_CLICKED),reinterpret_cast<LPARAM>(child(AddWidget)));
+        expect(config.widgets[0].x==movedX&&config.widgets[0].y==movedY&&draft.widgets[0].x==movedX,"Gallery action after Finish editing retains dragged positions");page=0;layoutSettings();
         auto& musicWidget=widgets[static_cast<int>(Kind::Music)];RECT musicRect{};GetWindowRect(musicWidget.window,&musicRect);
         const int musicDpi=GetDpiForWindow(musicWidget.window);
         auto musicPoint=MAKELPARAM(musicRect.left+MulDiv(231,musicDpi,96),musicRect.top+MulDiv(137,musicDpi,96));
@@ -454,6 +498,9 @@ void App::runChecks() {
         expect(config.seconds && config.preset==1,"Compact preset and seconds are configurable");
         for(int i=0;i<3;++i)widgets[i].surface->saveBmp(root/(L"compact-"+std::to_wstring(i)+L".bmp"));
         SendMessageW(control,WM_TIMECHANGE,0,0);expect(widgets[0].last.wYear>2020,"System time change refreshes display");
+        SendMessageW(settings,WM_COMMAND,MAKEWPARAM(Reset,BN_CLICKED),reinterpret_cast<LPARAM>(child(Reset)));
+        bool backup=false;for(const auto& entry:std::filesystem::directory_iterator(root))if(entry.path().filename().wstring().starts_with(L"settings.before-reset-"))backup=true;
+        expect(backup&&config.preset==0&&config.locked&&config.widgets[0].visible&&!config.widgets[7].visible&&grids.empty(),"Reset to defaults restores appearance and visibility with a settings backup");
         report["passed"]=true;
     }catch(const std::exception& e){report["passed"]=false;report["error"]=e.what();}
     config=original;paused=false;

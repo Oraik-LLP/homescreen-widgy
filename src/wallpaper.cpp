@@ -45,6 +45,17 @@ WidgetConfig matchWallpaper(const WidgetConfig& w,RECT rect,const WallpaperImage
     }
     return matched;
 }
+GlassTile frostedWallpaper(RECT rect,const WallpaperImage& image){
+    GlassTile tile;if(!image.valid)return tile;
+    tile.width=64;tile.height=48;tile.pixels.resize(tile.width*tile.height);
+    for(UINT y=0;y<tile.height;++y)for(UINT x=0;x<tile.width;++x){
+        double sx=rect.left+(x+.5)*(rect.right-rect.left)/tile.width,sy=rect.top+(y+.5)*(rect.bottom-rect.top)/tile.height;
+        unsigned r=0,g=0,b=0;
+        for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx){unsigned c=sample(image,sx+dx*18,sy+dy*18);r+=c>>16&255;g+=c>>8&255;b+=c&255;}
+        tile.pixels[y*tile.width+x]=0xff000000|(r/9<<16)|(g/9<<8)|b/9;
+    }
+    return tile;
+}
 static WallpaperResult readWallpapers(std::vector<Monitor> monitors,const WallpaperResult& previous) {
     WallpaperResult out;HRESULT initialized=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     {

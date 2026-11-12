@@ -9,8 +9,8 @@
 106 RCDATA "fonts/Outfit.ttf"
 107 RCDATA "fonts/GoogleSansFlex.ttf"
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,3,1,0
- PRODUCTVERSION 1,3,1,0
+ FILEVERSION 1,3,2,0
+ PRODUCTVERSION 1,3,2,0
  FILEFLAGSMASK 0x3fL
  FILEOS VOS_NT_WINDOWS32
  FILETYPE VFT_APP
@@ -21,8 +21,8 @@ BEGIN
   BEGIN
    VALUE "FileDescription", "panes\0"
    VALUE "ProductName", "panes\0"
-   VALUE "FileVersion", "1.3.1\0"
-   VALUE "ProductVersion", "1.3.1\0"
+   VALUE "FileVersion", "1.3.2\0"
+   VALUE "ProductVersion", "1.3.2\0"
    VALUE "OriginalFilename", "panes.exe\0"
   END
  END

@@ -88,7 +88,7 @@ void Surface::text(const std::wstring& value, const std::wstring& family, float 
     setColor(color);
     target->DrawText(value.c_str(), static_cast<UINT32>(value.size()), it->second, box, brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
-void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SYSTEMTIME& now, bool editing, bool present, UINT forcedDpi, const MediaSnapshot* media) {
+void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SYSTEMTIME& now, bool editing, bool present, UINT forcedDpi, const MediaSnapshot* media, const GlassTile* glass) {
     const UINT dpi = forcedDpi ? forcedDpi : GetDpiForWindow(window);
     auto logical = logicalSize(w.kind, c.preset, w.scale, c.seconds);
     SIZE size{MulDiv(logical.cx, dpi,96), MulDiv(logical.cy,dpi,96)};
@@ -102,11 +102,19 @@ void Surface::draw(HWND window, const WidgetConfig& w, const Config& c, const SY
     if (editing || c.preset==4 || w.backing || w.kind==Kind::Music) {
         const auto panel=D2D1::RoundedRect(D2D1::RectF(1,1,width-1,height-1),12,12);
         if(c.preset==4){
-            setColor(0xFFF6CE,(editing||w.backing)?0.86f:0.72f);
+            if(glass&&glass->width&&glass->height&&glass->pixels.size()==static_cast<size_t>(glass->width)*glass->height){
+                ID2D1Bitmap* backdrop{};ID2D1RoundedRectangleGeometry* clip{};
+                auto properties=D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_PREMULTIPLIED));
+                if(SUCCEEDED(target->CreateBitmap(D2D1::SizeU(glass->width,glass->height),glass->pixels.data(),glass->width*4,properties,&backdrop))&&SUCCEEDED(graphics.d2d->CreateRoundedRectangleGeometry(panel,&clip))){
+                    target->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(),clip),nullptr);target->DrawBitmap(backdrop,D2D1::RectF(1,1,width-1,height-1));target->PopLayer();
+                }release(clip);release(backdrop);
+            }
+            const bool lightText=((w.color>>16&255)*299+(w.color>>8&255)*587+(w.color&255)*114)>160000;
+            setColor(lightText?0x182029:0xFFF9E9,w.backing?.9f:.74f);
             target->FillRoundedRectangle(panel,brush);
-            setColor(0xFFFFFF,.78f);
+            setColor(0xFFFFFF,lightText?.22f:.58f);
             target->DrawRoundedRectangle(panel,brush,1);
-            setColor(0xFFFFFF,.62f);
+            setColor(0xFFFFFF,lightText?.28f:.65f);
             target->DrawLine(D2D1::Point2F(15,2),D2D1::Point2F(width-15,2),brush,1);
         }else if(w.kind==Kind::Music){
             setColor(0x18211D,editing?.55f:.13f);

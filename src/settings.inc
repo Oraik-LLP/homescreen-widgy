@@ -65,7 +65,7 @@ void App::makeSettingsControls(){
     label(0,L"Windows time zone (daylight saving is automatic)",12,402,6);
     auto zone=add(0,L"COMBOBOX",L"",Zone,12,434,618,260,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,6);
     SendMessageW(zone,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"UTC"));for(const auto& z:zones)SendMessageW(zone,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(z.TimeZoneKeyName));
-    label(0,L"Choose Edit mode to drag widgets. Finish editing to fix their positions.",12,524);
+    label(0,L"Edit mode: drag on the 24 px grid. Hold Shift to move freely.",12,524);
     label(0,L"New widgets start hidden. Notes live in Tagme.",12,558);
 
     label(1,L"THEMES — original static styles inspired by expressive lock screens",12,8);
@@ -115,7 +115,7 @@ void App::makeSettingsControls(){
     }
 
     control(settings,L"STATIC",L"",Status,24,730,430,46);
-    control(settings,L"BUTTON",L"Reset layout",Reset,24,780,125,32,WS_TABSTOP);
+    control(settings,L"BUTTON",L"Reset to defaults",Reset,24,780,154,32,WS_TABSTOP);
     control(settings,L"BUTTON",L"Apply",Apply,476,780,110,32,BS_DEFPUSHBUTTON|WS_TABSTOP);
     control(settings,L"BUTTON",L"Done",Done,602,780,110,32,WS_TABSTOP);
     for(auto id:{Color,Accent,ToolHex})SendMessageW(child(id),EM_SETLIMITTEXT,7,0);
@@ -173,7 +173,9 @@ void App::populateSettings(){
 bool App::readSettings(Config& candidate){
     try {
         auto number=[&](int id,int min,int max){auto s=controlText(child(id));if(s.empty()||s.size()>3||s.find_first_not_of(L"0123456789")!=std::wstring::npos)throw std::runtime_error("Enter a valid percentage or duration.");int n=std::stoi(s);if(n<min||n>max)throw std::runtime_error("A size, opacity, or duration is outside the displayed range.");return n;};
-        candidate=draft;auto& w=candidate.widgets[selected];w.scale=number(Scale,50,200);w.opacity=number(Opacity,10,100);
+        candidate=draft;candidate.locked=config.locked;candidate.shown=config.shown;
+        for(int i=0;i<WidgetCount;++i){auto& target=candidate.widgets[i];const auto& live=config.widgets[i];target.x=live.x;target.y=live.y;target.monitor=live.monitor;target.positioned=live.positioned;}
+        auto& w=candidate.widgets[selected];w.scale=number(Scale,50,200);w.opacity=number(Opacity,10,100);
         unsigned color{},accent{};if(!parseColor(controlText(child(Color)),color)||!parseColor(controlText(child(Accent)),accent))throw std::runtime_error("Use six-digit HEX colors, such as #91B89D.");
         if(color!=w.color||accent!=w.accent)w.customColors=true;w.color=color;w.accent=accent;
         w.font=controlText(child(Font));if(w.font.empty()||w.font.size()>100)throw std::runtime_error("Choose a font family.");w.font=graphics->resolveFont(w.font);
@@ -287,8 +289,9 @@ LRESULT CALLBACK App::SettingsProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
         else if(id>=FavoriteFirst&&id<FavoriteFirst+8){size_t index=id-FavoriteFirst;if(index<a->config.favorites.size())a->colorTool(a->config.favorites[index]);}
         else if(id>=PaletteFirst&&id<PaletteFirst+10){int index=id-PaletteFirst;auto& theme=Themes[index/2];a->colorTool(index%2?theme.accent:theme.text);a->page=2;a->scroll=0;a->layoutSettings();}
         else if(id==Reset){
-            if(!a->configWritable){std::filesystem::copy_file(a->root/L"settings.json",a->root/(L"settings.recovered-"+std::to_wstring(GetTickCount64())+L".json"));a->configWritable=true;}
-            a->warning.clear();a->config=Config{};a->draft=a->config;for(auto& w:a->widgets){w.surface->clearFormats();a->place(w,true);}a->requestWallpaper();a->render(true);a->repair();a->schedule();a->save();a->populateSettings();
+            std::error_code error;auto path=a->root/L"settings.json";
+            if(std::filesystem::exists(path)){std::filesystem::copy_file(path,a->root/(L"settings.before-reset-"+std::to_wstring(GetTickCount64())+L".json"),error);if(error){SetWindowTextW(a->child(Status),L"Could not back up settings. Defaults were not applied.");return 0;}}
+            a->configWritable=true;a->warning.clear();a->config=Config{};a->selected=0;a->page=0;a->scroll=0;for(auto& w:a->widgets){w.surface->clearFormats();a->place(w,true);}a->draft=a->config;a->updateMedia();a->requestWallpaper();a->render(true);a->repair();a->schedule();a->save();a->populateSettings();SetWindowTextW(a->child(Status),L"Defaults restored. Previous settings were backed up.");
         }
         else if((id==Color||id==Accent)&&notice==EN_CHANGE)InvalidateRect(a->panel,nullptr,TRUE);
         return 0;
